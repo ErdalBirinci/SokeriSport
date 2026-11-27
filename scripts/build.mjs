@@ -8,7 +8,7 @@ import { join } from 'node:path';
 const root = process.cwd();
 const dist = join(root, 'dist');
 
-const files = ['index.html', 'app.html', 'science.html', 'manifest.webmanifest', 'sw.js'];
+const files = ['index.html', 'app.html', 'science.html', '404.html', 'manifest.webmanifest', 'sw.js'];
 const dirs = ['assets', 'icons'];
 
 await rm(dist, { recursive: true, force: true });

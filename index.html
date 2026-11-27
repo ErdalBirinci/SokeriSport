@@ -19,6 +19,7 @@
     <link rel="stylesheet" href="assets/css/landing.css" />
   </head>
   <body class="landing">
+    <a class="skip-link" href="#problem">Skip to content</a>
     <div class="aurora" aria-hidden="true">
       <span class="aurora__blob aurora__blob--1"></span>
       <span class="aurora__blob aurora__blob--2"></span>
@@ -81,6 +82,9 @@
             </a>
             <a class="btn btn--soft btn--lg" href="science.html">Explore the rule engine</a>
           </div>
+          <button type="button" class="hypo-link" data-hypo>
+            <span aria-hidden="true">●</span> Feeling low right now?
+          </button>
           <dl class="hero__stats reveal" style="--d: 240ms">
             <div><dt>11</dt><dd>sport profiles</dd></div>
             <div><dt>7</dt><dd>trend arrows</dd></div>
@@ -490,10 +494,30 @@
       <div class="footer__bottom">
         <span>© <span id="year">2026</span> SokeriSport</span>
         <span>Guideline-based education tool · Data stays on your device</span>
+        <a class="footer__feedback" href="https://github.com/ErdalBirinci/SokeriSport/issues/new?template=plan-report.yml" rel="noopener">Report a problem</a>
       </div>
     </footer>
 
+    <dialog class="hypo" id="hypoDialog" aria-labelledby="hypoTitle">
+      <div class="hypo__head">
+        <span class="hypo__badge">Low right now</span>
+        <button type="button" class="hypo__close" data-hypo-close aria-label="Close">✕</button>
+      </div>
+      <h2 id="hypoTitle">Treat the low first.</h2>
+      <ol class="hypo__steps">
+        <li><b>Stop.</b> Sit down and end the session here.</li>
+        <li><b>15–20 g fast carbohydrate</b> — 4 glucose tablets, 150 ml juice, or 1 tablespoon of sugar or honey.</li>
+        <li><b>Wait 15 minutes.</b> Do not take insulin and do not restart training.</li>
+        <li><b>Recheck.</b> Still below 70 mg/dL (3.9 mmol/L)? Repeat the dose.</li>
+        <li><b>Once above 90 mg/dL (5.0)</b>, have a snack with slow carbohydrate; no exercise for 45 minutes.</li>
+      </ol>
+      <p class="hypo__note">
+        If you cannot swallow, or the person is confused or unresponsive, follow emergency services — this card does not apply.
+      </p>
+    </dialog>
+
     <script type="module" src="assets/js/landing.js"></script>
+    <script type="module" src="assets/js/hypo.js"></script>
     <script type="module" src="assets/js/pwa.js"></script>
   </body>
 </html>

@@ -166,3 +166,41 @@ test('the warning list is never empty in critical situations', () => {
   assert.ok(plan.warnings.length >= 2);
   assert.ok(plan.risks.hypo > 40);
 });
+
+test('slow carbohydrate needs at least as much as fast carbohydrate', () => {
+  const fast = buildPlan({ ...base, glucose: 110, iob: 1 });
+  const slow = buildPlan({ ...base, glucose: 110, iob: 1, carbType: 'slow' });
+  assert.ok(slow.preCarb.grams >= fast.preCarb.grams, 'slow carbs deliver less per gram');
+  assert.equal(slow.preCarb.carbType, 'slow');
+  assert.ok(slow.rationale.some((row) => /carb source/i.test(row.label)));
+});
+
+test('heat raises insulin sensitivity and lowers the simulated nadir', () => {
+  const cool = buildPlan({ ...base, glucose: 130, iob: 1.5 });
+  const hot = buildPlan({ ...base, glucose: 130, iob: 1.5, heat: true });
+  assert.ok(hot.numbers.sensitivity > cool.numbers.sensitivity);
+  assert.ok(hot.simulation.nadir < cool.simulation.nadir);
+  assert.ok(hot.warnings.some((warning) => /hot conditions/i.test(warning.title)));
+});
+
+test('a need above the single-dose ceiling is split into two portions', () => {
+  const plan = buildPlan({ ...base, glucose: 85, iob: 4, trend: 'doubleDown', durationMin: 90, weightKg: 70 });
+  assert.ok(plan.preCarb.grams > 0);
+  assert.ok(plan.preCarb.split, 'expected a second portion above the ceiling');
+  assert.ok(plan.preCarb.split.grams > 0);
+  assert.ok(plan.preCarb.split.afterMin > 0);
+});
+
+test('every calculation row explains itself', () => {
+  const plan = buildPlan({ ...base, heat: true });
+  for (const row of plan.rationale) {
+    assert.ok(row.label && row.expression && row.value, `incomplete row: ${row.label}`);
+    assert.ok(row.hint && row.hint.length > 20, `missing hint: ${row.label}`);
+  }
+});
+
+test('carbohydrate type and heat are normalised', () => {
+  const input = normalizeInput({ ...base, carbType: 'unknown', heat: 'yes' });
+  assert.equal(input.carbType, 'fast');
+  assert.equal(input.heat, true);
+});

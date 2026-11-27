@@ -1141,16 +1141,39 @@ output {
 }
 
 .math__row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 4px 14px;
-  padding: 10px 0;
   border-bottom: 1px solid rgba(16, 24, 40, 0.06);
-  align-items: baseline;
 }
 
 .math__row:last-child {
   border-bottom: 0;
+}
+
+.math__row summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  cursor: pointer;
+  list-style: none;
+}
+
+.math__row summary::-webkit-details-marker {
+  display: none;
+}
+
+.math__chev {
+  font-size: 14px;
+  color: var(--muted-2);
+  transition: transform 0.2s var(--ease-out);
+}
+
+.math__row[open] .math__chev {
+  transform: rotate(90deg);
+}
+
+.math__row[open] .math__label {
+  color: var(--ink);
 }
 
 .math__label {
@@ -1160,7 +1183,7 @@ output {
 }
 
 .math__expr {
-  grid-column: 1;
+  margin: 0;
   font-family: var(--mono);
   font-size: 10.8px;
   line-height: 1.5;
@@ -1168,10 +1191,27 @@ output {
   word-break: break-word;
 }
 
+.math__hint {
+  margin: 6px 0 0;
+  font-size: 11.6px;
+  line-height: 1.55;
+  color: var(--muted);
+}
+
+.math__link {
+  display: inline-block;
+  margin: 7px 0 12px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--brand-deep);
+  text-decoration: none;
+}
+
+.math__link:hover {
+  text-decoration: underline;
+}
+
 .math__val {
-  grid-row: 1 / span 2;
-  grid-column: 2;
-  align-self: center;
   font-family: var(--mono);
   font-size: 12.2px;
   font-weight: 600;
@@ -1433,14 +1473,8 @@ output {
     grid-template-columns: 1fr;
     gap: 2px;
   }
-  .math__row {
-    grid-template-columns: 1fr;
-  }
-  .math__val {
-    grid-row: auto;
-    grid-column: 1;
-    justify-self: start;
-    margin-top: 2px;
+  .math__row summary {
+    gap: 8px;
   }
   .topbar__link {
     display: none;
@@ -1480,5 +1514,138 @@ output {
   .unit-toggle button {
     padding: 4px 7px;
     font-size: 11px;
+  }
+}
+
+/* --- carbohydrate type: two choices ------------------------------- */
+#carbType {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+/* --- history ------------------------------------------------------ */
+.history__actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.history__outcome {
+  padding: 2px 8px;
+  font-size: 10.5px;
+  font-style: normal;
+  font-weight: 600;
+  color: var(--teal, #0f766e);
+  background: rgba(16, 185, 129, 0.12);
+  border-radius: var(--r-pill);
+  white-space: nowrap;
+}
+
+.history__outcome.is-hypo {
+  color: #b91c1c;
+  background: rgba(239, 68, 68, 0.12);
+}
+
+/* --- plan vs outcome ---------------------------------------------- */
+.outcome {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.outcome label {
+  display: grid;
+  gap: 4px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.outcome label input[type="number"] {
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--ink);
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.outcome .toggle {
+  align-self: end;
+}
+
+.outcome button {
+  justify-self: start;
+}
+
+.outcome__summary {
+  margin: 12px 0 0;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--muted);
+}
+
+@media (max-width: 640px) {
+  .outcome {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* --- print: hand the plan to the care team ------------------------ */
+@media print {
+  .topbar,
+  .form,
+  .mobile-bar,
+  .install-bar,
+  .offline-pill,
+  .toast,
+  .verdict__actions,
+  .hypo,
+  .skip-link,
+  .app-footer,
+  .outcome,
+  #baselineToggle {
+    display: none !important;
+  }
+
+  body {
+    background: #fff;
+  }
+
+  .print-only {
+    display: block;
+  }
+
+  .print-head {
+    margin: 0 0 12px;
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #6b7280;
+  }
+
+  .layout {
+    display: block;
+    max-width: none;
+    padding: 0;
+  }
+
+  .card,
+  .verdict,
+  .metric,
+  .plan,
+  .chart-wrap {
+    break-inside: avoid;
+    box-shadow: none !important;
+    border: 1px solid #d8dce6;
+  }
+
+  .math__hint,
+  .math__link {
+    display: none;
+  }
+
+  @page {
+    margin: 14mm;
   }
 }

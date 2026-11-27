@@ -17,7 +17,14 @@ import {
   fromMmol,
 } from './engine.js';
 import { drawTimeline } from './chart.js';
-import { loadProfile, saveProfile, loadHistory, pushHistory, clearHistory } from './storage.js';
+import {
+  loadProfile,
+  saveProfile,
+  loadHistory,
+  pushHistory,
+  clearHistory,
+  updateHistoryEntry,
+} from './storage.js';
 
 /* ------------------------------------------------------------------ */
 /* State                                                               */
@@ -25,9 +32,13 @@ import { loadProfile, saveProfile, loadHistory, pushHistory, clearHistory } from
 
 const state = { ...DEFAULTS };
 let plan = null;
+let currentBand = null;
 let showBaseline = true;
 let raf = null;
 let saveTimer = null;
+/** Timestamp of the entry the outcome form writes to (set by "Save result"). */
+let lastSavedTs = null;
+const outcomeDraft = { start: '', min: '', carbs: '', hypo: false };
 
 const $ = (id) => document.getElementById(id);
 
@@ -54,6 +65,8 @@ const els = {
   targetGlucose: $('targetGlucose'),
   targetUnit: $('targetUnit'),
   ketones: $('ketones'),
+  carbType: $('carbType'),
+  heat: $('heat'),
   pump: $('pump'),
   basalField: $('basalField'),
   basalRate: $('basalRate'),
@@ -62,7 +75,9 @@ const els = {
   results: $('results'),
   historySection: $('historySection'),
   historyList: $('historyList'),
+  historyExport: $('historyExport'),
   clearHistory: $('clearHistory'),
+  srStatus: $('srStatus'),
   toast: $('toast'),
   netBadge: $('netBadge'),
   netText: $('netText'),
@@ -188,6 +203,14 @@ function syncForm() {
   els.targetGlucose.step = isMmol() ? '0.1' : '1';
   els.targetUnit.textContent = unitText();
   els.ketones.value = state.ketones;
+  if (els.carbType) {
+    els.carbType.querySelectorAll('[data-carb]').forEach((b) => {
+      const on = b.dataset.carb === (state.carbType || 'fast');
+      b.classList.toggle('is-active', on);
+      b.setAttribute('aria-checked', String(on));
+    });
+  }
+  if (els.heat) els.heat.checked = Boolean(state.heat);
   els.pump.checked = state.pump;
   setField(els.basalRate, state.basalRate);
   els.basalField.hidden = !state.pump;
@@ -223,6 +246,7 @@ function paint() {
   const raw = { ...state };
   if (raw.iobEstimated) raw.iob = 1.5;
   plan = buildPlan(raw);
+  currentBand = buildBand(raw, plan);
 
   const u = state.unit;
   const G = (v) => formatGlucose(v, u);
@@ -343,6 +367,7 @@ function paint() {
           <span><i></i>Plan</span>
           <span><i class="dash"></i>No plan</span>
           <span><i class="band"></i>Target band</span>
+          <span><i class="soft"></i>Timing ±10 min</span>
         </div>
         <span>Nadir ${G(st.nadir)} · peak ${G(st.peak)} · finish ${G(st.endGlucose)}</span>
       </div>
@@ -415,11 +440,16 @@ function paint() {
       <div class="math">
         ${plan.rationale
           .map(
-            (r) => `<div class="math__row">
-              <span class="math__label">${r.label}</span>
-              <span class="math__expr">${r.expression}</span>
-              <span class="math__val">${r.value}</span>
-            </div>`,
+            (r) => `<details class="math__row">
+              <summary>
+                <span class="math__label">${r.label}</span>
+                <span class="math__val">${r.value}</span>
+                <span class="math__chev" aria-hidden="true">›</span>
+              </summary>
+              <p class="math__expr">${r.expression}</p>
+              ${r.hint ? `<p class="math__hint">${r.hint}</p>` : ''}
+              <a class="math__link" href="science.html#formulas">Formula and sources ↗</a>
+            </details>`,
           )
           .join('')}
       </div>
@@ -431,12 +461,15 @@ function paint() {
         ${plan.checks.map((c) => `<li><b>${c.at}</b><span>${c.text}</span></li>`).join('')}
       </ul>
     </div>
+
+    ${outcomeCard()}
   `;
 
   syncForm();
   drawChart();
   renderHistory();
   updateMobileBar();
+  announce();
   scheduleSave();
 }
 
@@ -473,12 +506,95 @@ function drawChart() {
   drawTimeline(canvas, {
     points: plan.simulation.points,
     baseline: plan.simulation.baseline,
+    uncertainty: currentBand,
     unit: state.unit,
     markers: plan.simulation.markers,
     exStart: plan.simulation.exStart,
     exEnd: plan.simulation.exEnd,
     showBaseline,
   });
+  canvas.dataset.band = currentBand ? 'on' : 'off';
+}
+
+/**
+ * Uncertainty band: the same plan with ±10 min of timing error and ±0.3 U of
+ * IOB error. The engine is deterministic, so these runs cost nothing extra.
+ */
+function buildBand(raw, main) {
+  const shift = (patch) => buildPlan({ ...raw, ...patch }).simulation.points;
+  const runs = [
+    shift({ leadTimeMin: Math.max(0, raw.leadTimeMin - 10) }),
+    shift({ leadTimeMin: Math.min(180, raw.leadTimeMin + 10) }),
+  ];
+  if (Number(raw.iob) > 0) {
+    runs.push(shift({ iob: Math.max(0, Number(raw.iob) - 0.3) }));
+    runs.push(shift({ iob: Math.min(30, Number(raw.iob) + 0.3) }));
+  }
+
+  const base = main.simulation.points;
+  const low = base.map((p, i) => ({ t: p.t, g: Math.min(p.g, ...runs.map((r) => r[i].g)) }));
+  const high = base.map((p, i) => ({ t: p.t, g: Math.max(p.g, ...runs.map((r) => r[i].g)) }));
+  return { low, high };
+}
+
+/** Screen-reader announcement for the verdict (aria-live region). */
+function announce() {
+  if (!els.srStatus || !plan) return;
+  els.srStatus.textContent = `${plan.status.title}. ${plan.status.headline} ${plan.status.detail}`;
+}
+
+/** "How did it go" card: plan vs what actually happened. */
+function outcomeCard() {
+  const unit = unitText();
+  const entry = lastSavedTs ? loadHistory().find((h) => h.ts === lastSavedTs) : null;
+  const outcome = entry?.outcome;
+  const disabled = lastSavedTs ? '' : 'disabled';
+  const summary = outcome ? outcomeSummary(entry) : '';
+
+  return `
+    <div class="card" id="outcomeCard">
+      <div class="card__head">
+        <div>
+          <h3>How did it go?</h3>
+          <p>${lastSavedTs ? 'Compare the plan with what actually happened' : 'Save the result first, then log the outcome'}</p>
+        </div>
+      </div>
+      <div class="outcome" ${disabled}>
+        <label><span>Start glucose (${unit})</span>
+          <input type="number" inputmode="decimal" data-outcome="start" value="${outcomeDraft.start}" ${disabled} />
+        </label>
+        <label><span>Lowest reading (${unit})</span>
+          <input type="number" inputmode="decimal" data-outcome="min" value="${outcomeDraft.min}" ${disabled} />
+        </label>
+        <label><span>Carbs taken (g)</span>
+          <input type="number" inputmode="numeric" data-outcome="carbs" value="${outcomeDraft.carbs}" ${disabled} />
+        </label>
+        <label class="toggle">
+          <input type="checkbox" data-outcome="hypo" ${outcomeDraft.hypo ? 'checked' : ''} ${disabled} />
+          Hypo during or after
+        </label>
+        <button type="button" class="btn btn--primary btn--sm" data-action="save-outcome" ${disabled}>Save outcome</button>
+      </div>
+      <p class="outcome__summary" data-outcome-summary>${summary}</p>
+    </div>`;
+}
+
+function outcomeSummary(entry) {
+  const o = entry.outcome || {};
+  const parts = [];
+  if (Number.isFinite(o.start) && Number.isFinite(entry.glucose)) {
+    parts.push(`start ${Math.round(o.start)} instead of ${Math.round(entry.glucose)} ${unitText()}`);
+  }
+  if (Number.isFinite(o.min) && Number.isFinite(entry.plannedNadir)) {
+    const diff = Math.round(o.min - entry.plannedNadir);
+    parts.push(`lowest ${Math.round(o.min)} (plan ${Math.round(entry.plannedNadir)}, ${diff >= 0 ? '+' : ''}${diff})`);
+  }
+  if (Number.isFinite(o.carbs) && Number.isFinite(entry.plannedCarbs)) {
+    parts.push(`${Math.round(o.carbs)} g carbohydrate (plan ${entry.plannedCarbs} g)`);
+  }
+  if (o.hypo) parts.push('hypo reported');
+  if (parts.length === 0) return '';
+  return `Logged: ${parts.join(' · ')}.`;
 }
 
 /* ------------------------------------------------------------------ */
@@ -595,6 +711,13 @@ function bind() {
     if (btn.dataset.action === 'copy') await copyPlan();
     if (btn.dataset.action === 'save') saveResult();
     if (btn.dataset.action === 'print') window.print();
+    if (btn.dataset.action === 'save-outcome') saveOutcome();
+  });
+
+  els.results.addEventListener('input', (e) => {
+    const field = e.target.closest('[data-outcome]');
+    if (!field || field.dataset.outcome === 'hypo') return;
+    outcomeDraft[field.dataset.outcome] = field.value;
   });
 
   els.results.addEventListener('change', (e) => {
@@ -602,7 +725,28 @@ function bind() {
       showBaseline = e.target.checked;
       drawChart();
     }
+    const field = e.target.closest('[data-outcome]');
+    if (field && field.dataset.outcome === 'hypo') outcomeDraft.hypo = field.checked;
   });
+
+  if (els.carbType) {
+    els.carbType.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-carb]');
+      if (!btn) return;
+      state.carbType = btn.dataset.carb;
+      syncForm();
+      render();
+    });
+  }
+
+  if (els.heat) {
+    els.heat.addEventListener('change', () => {
+      state.heat = els.heat.checked;
+      render();
+    });
+  }
+
+  if (els.historyExport) els.historyExport.addEventListener('click', exportCsv);
 
   els.resetBtn.addEventListener('click', () => {
     Object.assign(state, DEFAULTS, { pump: DEFAULTS.pump });
@@ -652,6 +796,26 @@ function bind() {
   window.addEventListener('resize', () => {
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(drawChart, 160);
+  });
+
+  // Printing: stamp the date and open the calculation rows so the care team
+  // sees the formulas on paper. Closed again afterwards.
+  window.addEventListener('beforeprint', () => {
+    const stamp = $('printDate');
+    if (stamp) stamp.textContent = new Date().toLocaleDateString('en-GB');
+    document.querySelectorAll('details.math__row').forEach((row) => {
+      if (!row.open) {
+        row.open = true;
+        row.dataset.autoOpened = '1';
+      }
+    });
+  });
+
+  window.addEventListener('afterprint', () => {
+    document.querySelectorAll('details.math__row[data-auto-opened]').forEach((row) => {
+      row.open = false;
+      delete row.dataset.autoOpened;
+    });
   });
 }
 
@@ -703,34 +867,131 @@ function scheduleSave() {
 
 function saveResult() {
   if (!plan) return;
+  const ts = Date.now();
   pushHistory({
-    ts: Date.now(),
+    ts,
     sport: plan.sport.name,
     sportGlyph: plan.sport.glyph,
     glucose: Math.round(state.glucose),
     carbs: plan.preCarb.grams,
     level: plan.status.level,
     status: plan.status.title,
+    durationMin: state.durationMin,
+    intensity: plan.level.label,
+    plannedCarbs: plan.preCarb.grams + plan.during.total,
+    plannedNadir: Math.round(plan.simulation.nadir),
+    plannedPeak: Math.round(plan.simulation.peak),
+    duringPerHour: plan.during.perHour,
+    basalPercent: plan.basal.reductionPercent,
     state: { ...state },
   });
-  renderHistory();
+  lastSavedTs = ts;
+  Object.assign(outcomeDraft, { start: '', min: '', carbs: '', hypo: false });
+  paint();
   toast('Simulation added to history');
+}
+
+/** Merges the "how did it go" form into the saved history entry. */
+function saveOutcome() {
+  if (!lastSavedTs) {
+    toast('Save the result first');
+    return;
+  }
+  const toMg = (value) => {
+    const n = parseFloat(String(value).replace(',', '.'));
+    if (!Number.isFinite(n)) return null;
+    return Math.round(isMmol() ? fromMmol(n) : n);
+  };
+  const outcome = {
+    start: toMg(outcomeDraft.start),
+    min: toMg(outcomeDraft.min),
+    carbs: outcomeDraft.carbs === '' ? null : Number(outcomeDraft.carbs),
+    hypo: Boolean(outcomeDraft.hypo),
+  };
+  if (outcome.start === null && outcome.min === null && outcome.carbs === null && !outcome.hypo) {
+    toast('Enter at least one outcome value');
+    return;
+  }
+
+  updateHistoryEntry(lastSavedTs, { outcome });
+  const entry = loadHistory().find((h) => h.ts === lastSavedTs);
+  const summary = document.querySelector('[data-outcome-summary]');
+  if (summary && entry) summary.textContent = outcomeSummary(entry);
+  renderHistory();
+  toast('Outcome saved');
+}
+
+/** CSV export for the care team: plan, outcome and the input snapshot. */
+function exportCsv() {
+  const rows = loadHistory();
+  if (rows.length === 0) {
+    toast('No simulations to export');
+    return;
+  }
+  const header = [
+    'date',
+    'sport',
+    'duration_min',
+    'intensity',
+    'glucose_mgdl',
+    'planned_carbs_g',
+    'planned_per_hour_g',
+    'planned_basal_percent',
+    'planned_nadir_mgdl',
+    'actual_start_mgdl',
+    'actual_lowest_mgdl',
+    'actual_carbs_g',
+    'hypo_reported',
+  ];
+  const lines = rows.map((h) =>
+    [
+      new Date(h.ts).toISOString(),
+      `"${h.sport}"`,
+      h.durationMin ?? '',
+      `"${h.intensity ?? ''}"`,
+      Math.round(h.glucose),
+      h.plannedCarbs ?? h.carbs,
+      h.duringPerHour ?? '',
+      h.basalPercent ?? '',
+      h.plannedNadir ?? '',
+      h.outcome?.start ?? '',
+      h.outcome?.min ?? '',
+      h.outcome?.carbs ?? '',
+      h.outcome?.hypo ? 'yes' : 'no',
+    ].join(','),
+  );
+
+  const blob = new Blob([[header.join(','), ...lines].join('\n')], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `sokerisport-history-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+  toast('History exported as CSV');
 }
 
 function renderHistory() {
   const list = loadHistory();
   els.historySection.hidden = list.length === 0;
   els.historyList.innerHTML = list
-    .map(
-      (h) => `
+    .map((h) => {
+      const o = h.outcome;
+      const badge = o
+        ? `<em class="history__outcome${o.hypo ? ' is-hypo' : ''}" title="Logged outcome">${o.hypo ? 'hypo' : 'logged'}${Number.isFinite(o.min) ? ` · ${Math.round(o.min)}` : ''}</em>`
+        : '';
+      return `
       <li>
         <button type="button" class="link-btn" data-load="${h.ts}" title="Restore this simulation">
           ${h.sportGlyph || '•'} ${h.sport}
         </button>
         <b>${Math.round(h.glucose)} → ${h.carbs} g</b>
-        <time>${new Date(h.ts).toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</time>
-      </li>`,
-    )
+        ${badge}
+        <time>${new Date(h.ts).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</time>
+      </li>`;
+    })
     .join('');
 }
 

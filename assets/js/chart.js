@@ -7,6 +7,7 @@ import { glucoseNumber, toMmol } from './engine.js';
 
 const CSS = {
   line: '#2F6BFF',
+  band: 'rgba(47,107,255,0.10)',
   lineSoft: 'rgba(47,107,255,0.14)',
   base: 'rgba(90,100,120,0.55)',
   grid: 'rgba(16,24,40,0.07)',
@@ -19,7 +20,7 @@ const CSS = {
 };
 
 export function drawTimeline(canvas, opts) {
-  const { points, baseline, unit = 'mgdl', markers = [], exStart = 0, exEnd = 0, showBaseline = true } = opts;
+  const { points, baseline, uncertainty = null, unit = 'mgdl', markers = [], exStart = 0, exEnd = 0, showBaseline = true } = opts;
   if (!canvas || !points || points.length === 0) return;
 
   const dpr = window.devicePixelRatio || 1;
@@ -40,7 +41,8 @@ export function drawTimeline(canvas, opts) {
   const innerW = w - padL - padR;
   const innerH = h - padT - padB;
 
-  const all = showBaseline ? points.concat(baseline || []) : points;
+  const bandPoints = uncertainty && uncertainty.low && uncertainty.high ? uncertainty.low.concat(uncertainty.high) : [];
+  const all = (showBaseline ? points.concat(baseline || []) : points).concat(bandPoints);
   const maxT = points[points.length - 1].t;
   const dataMin = Math.min(...all.map((p) => p.g));
   const dataMax = Math.max(...all.map((p) => p.g));
@@ -100,6 +102,16 @@ export function drawTimeline(canvas, opts) {
     ctx.stroke();
     ctx.fillStyle = CSS.text;
     ctx.fillText(t === 0 ? '0' : `${t}′`, x, padT + innerH + 8);
+  }
+
+  // --- uncertainty band (timing / dose sensitivity)
+  if (bandPoints.length) {
+    ctx.beginPath();
+    uncertainty.high.forEach((p, i) => (i === 0 ? ctx.moveTo(X(p.t), Y(p.g)) : ctx.lineTo(X(p.t), Y(p.g))));
+    for (let i = uncertainty.low.length - 1; i >= 0; i -= 1) ctx.lineTo(X(uncertainty.low[i].t), Y(uncertainty.low[i].g));
+    ctx.closePath();
+    ctx.fillStyle = CSS.band;
+    ctx.fill();
   }
 
   // --- baseline scenario

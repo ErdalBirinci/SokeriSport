@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    name: Tests and guards
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Engine and language tests
+        run: npm test
+
+      - name: Internal links and anchors
+        run: node scripts/check-links.mjs
+
+      - name: Service worker cache-busting guard
+        run: node scripts/check-sw-version.mjs
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.sha || github.event.before }}

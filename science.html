@@ -57,7 +57,7 @@
           <span class="badge badge--ok">Deterministic</span>
           <span class="badge">Pure JavaScript</span>
           <span class="badge">Offline</span>
-          <span class="badge">Version 1.0</span>
+          <span class="badge">Version 1.6</span>
         </div>
       </header>
 
@@ -245,7 +245,7 @@
           </div>
           <div class="model-flow__node">
             <b>Carbohydrate</b>
-            <span>Pre-load: 10 min delay + 35 min absorption; in-session doses: 5 min delay + 30 min absorption.</span>
+            <span>Pre-load: 10 min delay + 35 min absorption (slow carbohydrate: +15 min, ×1.9 duration, ×0.75 plasma share); in-session doses: 5 min delay + 30 min absorption.</span>
           </div>
           <div class="model-flow__node">
             <b>Counter-regulation</b>
@@ -256,6 +256,47 @@
           The model is clamped to 40–350 mg/dL. Two curves are then produced, planned and
           unplanned; the difference between them shows what the app contributes.
         </p>
+
+        <h3>Carbohydrate type, heat and dose splitting</h3>
+        <div class="table-wrap">
+          <table class="table">
+            <thead>
+              <tr><th>Input</th><th>Effect on the model</th><th>Value</th><th>Type</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><b>Fast carbohydrate</b></td>
+                <td>Reference source: gel, juice, glucose tablet</td>
+                <td>plasma share 1.0 · 10 min delay · 35 min absorption</td>
+                <td>[V] reference</td>
+              </tr>
+              <tr>
+                <td><b>Slow carbohydrate</b></td>
+                <td>Less glucose per gram inside the bridge window; later onset, longer tail</td>
+                <td>plasma share ×0.75 · +15 min delay · absorption ×1.9</td>
+                <td>[V] assumption</td>
+              </tr>
+              <tr>
+                <td><b>Heat</b></td>
+                <td>Faster insulin absorption through skin perfusion, small extra thermoregulatory cost</td>
+                <td>sensitivity ×1.12 · oxidation ×1.05</td>
+                <td>[V] assumption</td>
+              </tr>
+              <tr>
+                <td><b>Dose splitting</b></td>
+                <td>When the pre-dose exceeds the single-dose ceiling, the remainder follows as a second portion</td>
+                <td>+20 min after the first portion</td>
+                <td>[V] modelling rule</td>
+              </tr>
+              <tr>
+                <td><b>Uncertainty band</b></td>
+                <td>Timing and IOB error around the plan, drawn as a shaded area</td>
+                <td>±10 min and ±0.3 U, four extra deterministic runs</td>
+                <td>[V] sensitivity view</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </section>
 
       <!-- LIMITS -->

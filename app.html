@@ -13,6 +13,8 @@
     <link rel="stylesheet" href="assets/css/app.css" />
   </head>
   <body class="app">
+    <a class="skip-link" href="#results">Skip to the plan</a>
+    <p class="print-only print-head"><strong>SokeriSport</strong> — simulation summary · <span id="printDate"></span></p>
     <div class="aurora aurora--subtle" aria-hidden="true">
       <span class="aurora__blob aurora__blob--1"></span>
       <span class="aurora__blob aurora__blob--2"></span>
@@ -132,6 +134,26 @@
             <span class="field__label"><span>Intensity</span><span class="field__hint" id="intensityHint">RPE 7–8</span></span>
             <div class="segmented" id="intensity" role="radiogroup" aria-label="Intensity"></div>
           </div>
+
+          <div class="field">
+            <span class="field__label"><span>Carbohydrate type</span><span class="field__hint">pre-workout source</span></span>
+            <div class="segmented" id="carbType" role="radiogroup" aria-label="Carbohydrate type">
+              <button type="button" data-carb="fast" role="radio" aria-checked="true" class="is-active">Fast</button>
+              <button type="button" data-carb="slow" role="radio" aria-checked="false">Slow</button>
+            </div>
+            <p class="field__help">Fast = gel, juice, tablet. Slow = oats, bread, banana: flatter and later rise, larger dose.</p>
+          </div>
+
+          <div class="field field--switch">
+            <div>
+              <label for="heat">Training in the heat</label>
+              <p class="field__help">Faster insulin absorption and a higher sweat loss.</p>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="heat" />
+              <span class="switch__track" aria-hidden="true"><span></span></span>
+            </label>
+          </div>
         </section>
 
         <details class="panel panel--details" id="clinical">
@@ -219,19 +241,24 @@
         <section class="history" id="historySection" hidden>
           <header class="history__head">
             <h3>Recent simulations</h3>
-            <button type="button" class="link-btn" id="clearHistory">Clear</button>
+            <div class="history__actions">
+              <button type="button" class="link-btn" id="historyExport">Export CSV</button>
+              <button type="button" class="link-btn" id="clearHistory">Clear</button>
+            </div>
           </header>
           <ul class="history__list" id="historyList"></ul>
         </section>
       </form>
 
       <!-- RIGHT: results -------------------------------------------- -->
-      <aside class="results" id="results" aria-live="polite" aria-atomic="false">
+      <aside class="results" id="results">
         <noscript>
           <div class="panel">This simulator requires JavaScript.</div>
         </noscript>
       </aside>
     </main>
+
+    <p class="sr-only" id="srStatus" role="status" aria-live="polite"></p>
 
     <!-- Mobile: result summary always within reach -->
     <div class="mobile-bar" id="mobileBar" hidden>
@@ -255,10 +282,31 @@
         SokeriSport is an educational simulation; it is not medical advice, diagnosis or treatment.
         Make insulin and carbohydrate decisions together with your diabetes team.
         <a href="science.html">Method and sources</a>
+        <a href="https://github.com/ErdalBirinci/SokeriSport/issues/new?template=plan-report.yml" rel="noopener">Report a problem</a>
+        <button type="button" class="link-btn" data-hypo>Feeling low right now?</button>
       </p>
     </footer>
 
+    <dialog class="hypo" id="hypoDialog" aria-labelledby="hypoTitle">
+      <div class="hypo__head">
+        <span class="hypo__badge">Low right now</span>
+        <button type="button" class="hypo__close" data-hypo-close aria-label="Close">✕</button>
+      </div>
+      <h2 id="hypoTitle">Treat the low first.</h2>
+      <ol class="hypo__steps">
+        <li><b>Stop.</b> Sit down and end the session here.</li>
+        <li><b>15–20 g fast carbohydrate</b> — 4 glucose tablets, 150 ml juice, or 1 tablespoon of sugar or honey.</li>
+        <li><b>Wait 15 minutes.</b> Do not take insulin and do not restart training.</li>
+        <li><b>Recheck.</b> Still below 70 mg/dL (3.9 mmol/L)? Repeat the dose.</li>
+        <li><b>Once above 90 mg/dL (5.0)</b>, have a snack with slow carbohydrate; no exercise for 45 minutes.</li>
+      </ol>
+      <p class="hypo__note">
+        If you cannot swallow, or the person is confused or unresponsive, follow emergency services — this card does not apply.
+      </p>
+    </dialog>
+
     <script type="module" src="assets/js/app.js"></script>
+    <script type="module" src="assets/js/hypo.js"></script>
     <script type="module" src="assets/js/pwa.js"></script>
   </body>
 </html>

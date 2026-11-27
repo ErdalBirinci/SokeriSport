@@ -1,6 +1,33 @@
-/** Service worker registration and install flow. */
+/**
+ * Service worker registration, install prompt and offline notice.
+ */
 
 let registration = null;
+let deferredPrompt = null;
+
+const DISMISS_KEY = 'sokerisport.install.dismissed';
+
+function isStandalone() {
+  return (
+    window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true
+  );
+}
+
+function dismissed() {
+  try {
+    return localStorage.getItem(DISMISS_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function rememberDismissed() {
+  try {
+    localStorage.setItem(DISMISS_KEY, '1');
+  } catch {
+    /* storage may be unavailable; the bar just comes back next visit */
+  }
+}
 
 export function registerServiceWorker() {
   if (!('serviceWorker' in navigator)) return;
@@ -12,5 +39,77 @@ export function registerServiceWorker() {
     }
   });
 }
+
+/** Small banner: install on Android/desktop, instructions on iOS Safari. */
+function showInstallBar() {
+  if (dismissed() || isStandalone() || document.querySelector('.install-bar')) return;
+
+  const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  if (!deferredPrompt && !ios) return;
+
+  const bar = document.createElement('div');
+  bar.className = 'install-bar';
+  bar.setAttribute('role', 'region');
+  bar.setAttribute('aria-label', 'Install SokeriSport');
+  bar.innerHTML = `
+    <div class="install-bar__text">
+      <b>Add SokeriSport to your home screen</b>
+      <span>${ios ? 'Tap Share, then “Add to Home Screen”.' : 'Works offline, no app store needed.'}</span>
+    </div>
+    ${ios ? '' : '<button type="button" class="btn btn--primary btn--sm" data-install>Install</button>'}
+    <button type="button" class="link-btn" data-dismiss>Not now</button>`;
+  document.body.appendChild(bar);
+
+  bar.querySelector('[data-install]')?.addEventListener('click', async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    await deferredPrompt.userChoice.catch(() => {});
+    deferredPrompt = null;
+    bar.remove();
+  });
+  bar.querySelector('[data-dismiss]').addEventListener('click', () => {
+    rememberDismissed();
+    bar.remove();
+  });
+}
+
+/** Landing pages have no network badge, so they get a compact offline pill. */
+function paintOffline() {
+  if (document.getElementById('netBadge')) return;
+  const offline = !navigator.onLine;
+  let pill = document.querySelector('.offline-pill');
+
+  if (!offline) {
+    pill?.remove();
+    return;
+  }
+  if (!pill) {
+    pill = document.createElement('div');
+    pill.className = 'offline-pill';
+    pill.setAttribute('role', 'status');
+    pill.textContent = 'Offline — everything still works.';
+    document.body.appendChild(pill);
+  }
+}
+
+window.addEventListener('beforeinstallprompt', (event) => {
+  event.preventDefault();
+  deferredPrompt = event;
+  showInstallBar();
+});
+
+window.addEventListener('appinstalled', () => {
+  deferredPrompt = null;
+  document.querySelector('.install-bar')?.remove();
+});
+
+window.addEventListener('online', paintOffline);
+window.addEventListener('offline', paintOffline);
+
+window.addEventListener('load', () => {
+  paintOffline();
+  // iOS never fires beforeinstallprompt; give the hint once the page settles.
+  setTimeout(showInstallBar, 2500);
+});
 
 registerServiceWorker();

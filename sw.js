@@ -3,7 +3,7 @@
  * The app shell is kept in the cache; works in offline places like the pitch or the gym.
  */
 
-const VERSION = 'sokerisport-v1.5.0';
+const VERSION = 'sokerisport-v1.6.0';
 const SHELL = [
   './',
   './index.html',
@@ -20,6 +20,7 @@ const SHELL = [
   './assets/js/landing.js',
   './assets/js/docs.js',
   './assets/js/pwa.js',
+  './assets/js/hypo.js',
   './assets/img/favicon.svg',
   './icons/icon-192.png',
   './icons/icon-512.png',

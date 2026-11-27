@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>Page not found — SokeriSport</title>
+    <script>
+      // Static hosting has no extensionless routes: /app → /app.html.
+      (function () {
+        var path = location.pathname;
+        var base = path.indexOf('/SokeriSport/') === 0 ? '/SokeriSport/' : '/';
+        var page = path.slice(base.length).replace(/\/+$/, '');
+        if (page === 'app' || page === 'science') {
+          location.replace(base + page + '.html' + location.search + location.hash);
+          return;
+        }
+        var home = document.getElementById('home');
+        if (home) home.href = base;
+        location.replace(base);
+      })();
+    </script>
+  </head>
+  <body>
+    <h1>Page not found</h1>
+    <p>The page you asked for does not exist.</p>
+    <p><a id="home" href="./index.html">Back to SokeriSport</a></p>
+  </body>
+</html>

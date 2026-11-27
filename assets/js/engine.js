@@ -43,6 +43,11 @@ export const RULES = {
   DURING_PLASMA_SHARE: 0.35, // [V] during exercise most CHO is oxidised in muscle
   SAFE_IOB: 0.8, // [K] acceptable IOB ceiling before exercise
   LATE_HYPO_HORIZON: 180, // [K] late hypoglycemia up to 6–12 hours
+  SLOW_CARB_SHARE: 0.75, // [V] slow carbohydrate delivers less glucose in the bridge window
+  SLOW_CARB_LAG_MIN: 15, // [V] slow carbohydrate starts absorbing later
+  SLOW_CARB_DUR_MUL: 1.9, // [V] slow carbohydrate keeps absorbing longer
+  HEAT_SENSITIVITY: 1.12, // [V] heat raises skin perfusion → faster insulin action
+  HEAT_OXIDATION: 1.05, // [V] small extra thermoregulatory carbohydrate cost
 };
 
 /* ------------------------------------------------------------------ */
@@ -164,6 +169,8 @@ export const DEFAULTS = {
   pump: true,
   basalRate: 0.9,
   targetGlucose: 140,
+  carbType: 'fast',
+  heat: false,
   iobEstimated: false,
 };
 
@@ -218,6 +225,8 @@ export function normalizeInput(raw = {}) {
     intensity: clamp(Math.round(num(raw.intensity, DEFAULTS.intensity)), 1, 4),
     leadTimeMin: clamp(num(raw.leadTimeMin, DEFAULTS.leadTimeMin), 0, 180),
     ketones: KETONES.some((k) => k.id === raw.ketones) ? raw.ketones : 'none',
+    carbType: raw.carbType === 'slow' ? 'slow' : 'fast',
+    heat: Boolean(raw.heat),
     pump: Boolean(raw.pump),
     basalRate: clamp(num(raw.basalRate, DEFAULTS.basalRate), 0, 5),
     targetGlucose: clamp(conv(raw.targetGlucose ?? (unit === 'mmol' ? toMmol(DEFAULTS.targetGlucose) : DEFAULTS.targetGlucose)), 90, 220),
@@ -243,10 +252,15 @@ export function buildPlan(raw = {}) {
   const carbFactor = carbGlucoseFactor(weight);
   const durationH = input.durationMin / 60;
   const ketoneRisk = KETONES.find((k) => k.id === input.ketones).risk;
+  const carbShape =
+    input.carbType === 'slow'
+      ? { lagExtra: RULES.SLOW_CARB_LAG_MIN, durMul: RULES.SLOW_CARB_DUR_MUL, share: RULES.SLOW_CARB_SHARE }
+      : { lagExtra: 0, durMul: 1, share: 1};
+  const heatMul = input.heat ? RULES.HEAT_SENSITIVITY : 1;
 
   /* --- 1. Derived quantities --------------------------------------- */
-  const oxidation = sport.oxidation * level.mul; // g/h
-  const sensitivity = sport.sensitivity;
+  const oxidation = sport.oxidation * level.mul * (input.heat ? RULES.HEAT_OXIDATION : 1); // g/h
+  const sensitivity = sport.sensitivity * heatMul;
   const startProjected = input.glucose + trend.rate * input.leadTimeMin;
   const iobExposure = input.iob * input.isf * sensitivity;
   const safeFloor = RULES.SAFE_FLOOR;
@@ -264,7 +278,9 @@ export function buildPlan(raw = {}) {
 
   /* --- 2. Carbohydrate need ---------------------------------------- */
   const rawDeficit = target - startProjected + effectiveIobDrop + preDraw - adrenergicCredit;
-  const needGramsRaw = rawDeficit / carbFactor;
+  // Slow carbohydrate delivers less glucose per gram inside the bridge window,
+  // so the same deficit needs a larger dose.
+  const needGramsRaw = rawDeficit / (carbFactor * carbShape.share);
   const weightCap = weight * 0.6;
   const preCap = Math.round(clamp(Math.min(RULES.MAX_PRE_CARBS, weightCap), 10, 60));
 
@@ -286,6 +302,13 @@ export function buildPlan(raw = {}) {
 
 
   const timingMin = input.durationMin >= 90 || sport.category === 'ENDURANCE' ? 25 : 15;
+  /** Above the single-dose ceiling a second, smaller portion is scheduled. */
+  const splitGrams =
+    preCapped && gramsUncapped - preCap >= 15 ? Math.min(20, Math.round((gramsUncapped - preCap) / 5) * 5) : 0;
+  const carbNote =
+    input.carbType === 'slow'
+      ? 'Slow carbohydrate (oats, bread, banana): a flatter and later rise. Start 10–15 min earlier and keep a fast source (gel or juice) in reserve.'
+      : 'Fast-acting carbohydrate (gel, juice, glucose tablet). Peaks in roughly 15 minutes.';
   const preCarb = {
     mode: preGrams > 0 ? 'exercise' : 'none',
     grams: preGrams,
@@ -293,10 +316,12 @@ export function buildPlan(raw = {}) {
     capped: preCapped,
     uncappedGrams: Math.round(gramsUncapped),
     cap: preCap,
+    carbType: input.carbType,
+    split: splitGrams ? { grams: splitGrams, afterMin: 20 } : null,
     note:
       preGrams === 0
         ? 'No extra carbohydrate advised before exercise. Your glucose range does not call for it.'
-        : `Fast-acting carbohydrate (gel, juice, glucose tablet). ${preCapped ? 'Your need is above the ceiling: too much in one dose upsets the stomach, spread the rest across the session.' : ''}`,
+        : `${carbNote} ${preCapped ? 'Your need is above the ceiling: too much in one dose upsets the stomach, so the rest is split.' : ''}`.trim(),
   };
 
   // In hypoglycemia the treatment protocol applies, not the exercise plan.
@@ -330,7 +355,11 @@ export function buildPlan(raw = {}) {
       input.durationMin < 45
         ? 'Sessions under 45 minutes rarely need extra carbohydrate; a CGM check every 20–30 min is enough.'
         : `The ${perHour} g/h target is based on the oxidation rate measured for ${sport.name} at ${level.label.toLowerCase()} intensity.`,
-    hydration: input.durationMin >= 60 ? '500–800 ml of fluid per hour; add electrolytes in the heat.' : '200–400 ml of fluid per hour.',
+    hydration: input.heat
+      ? 'Hot conditions: 600–900 ml of fluid per hour plus electrolytes; expect a faster insulin effect and check sooner.'
+      : input.durationMin >= 60
+        ? '500–800 ml of fluid per hour; add electrolytes when it is warm.'
+        : '200–400 ml of fluid per hour.',
   };
 
   /* --- 4. Basal reduction scenario --------------------------------- */
@@ -393,7 +422,7 @@ export function buildPlan(raw = {}) {
   };
 
   /* --- 7. Simulation ----------------------------------------------- */
-  const simulation = simulate(input, { preCarb, during, sport, oxidation, carbFactor, trend, level });
+  const simulation = simulate(input, { preCarb, during, sport, oxidation, carbFactor, trend, level, carbShape, sensitivity });
 
   /* --- 8. Status + risk -------------------------------------------- */
   const risks = {
@@ -424,31 +453,53 @@ export function buildPlan(raw = {}) {
       label: 'Starting projection',
       expression: `${Math.round(input.glucose)} + (${trend.rate > 0 ? '+' : ''}${trend.rate} mg/dL/min × ${input.leadTimeMin} min)`,
       value: `${Math.round(startProjected)} mg/dL`,
+      hint: 'Your reading now, carried forward with the CGM trend arrow for the time left before exercise.',
     },
     {
       label: 'Drop caused by IOB',
       expression: `${round1(input.iob)} U × ${Math.round(input.isf)} mg/dL/U × ${sensitivity.toFixed(2)} (exercise sensitivity)`,
       value: `−${Math.round(effectiveIobDrop)} mg/dL${effectiveIobDrop < iobExposure - 1 ? ` (cap: ${Math.round(iobExposure)})` : ''}`,
+      hint: 'Active insulin is multiplied by your sensitivity factor and the sport\u2019s exercise multiplier, then capped so it never claims more than the distance to the safe floor.',
     },
     {
       label: `Bridge window (${bridgeMin} min)`,
       expression: `${Math.round(oxidation)} g/h × ${(bridgeMin / 60).toFixed(2)} h × ${carbFactor.toFixed(2)} mg/dL/g × 0.35`,
       value: `−${Math.round(preDraw)} mg/dL`,
+      hint: 'Only the first part of the session is bridged by the pre-dose; the rest belongs to the in-session schedule, so the two are never double counted.',
     },
     {
       label: 'Catecholamine credit',
       expression: `${sport.name} · ${sport.category === 'IHE' || sport.category === 'MIXED' ? 'adrenaline effect in the first 20 min' : 'negligible'}`,
       value: `+${Math.round(adrenergicCredit)} mg/dL`,
+      hint: 'Sprint and interval work releases adrenaline, which lifts glucose in the opening minutes and buys a small carbohydrate credit.',
     },
+    {
+      label: 'Carb source',
+      expression: `${input.carbType === 'slow' ? 'Slow (oats, bread, banana)' : 'Fast (gel, juice, tablet)'} · plasma share ×${carbShape.share}`,
+      value: `1 g per ${(carbFactor * carbShape.share).toFixed(2)} mg/dL`,
+      hint: 'Slow carbohydrate delivers less glucose per gram inside the bridge window, so the same deficit needs a larger dose with a flatter, later rise.',
+    },
+    ...(input.heat
+      ? [
+          {
+            label: 'Heat correction',
+            expression: `insulin sensitivity ×${RULES.HEAT_SENSITIVITY.toFixed(2)} · oxidation ×${RULES.HEAT_OXIDATION.toFixed(2)}`,
+            value: 'applied',
+            hint: 'In the heat skin blood flow rises: insulin is absorbed faster and sweating adds a small carbohydrate cost.',
+          },
+        ]
+      : []),
     {
       label: 'Net gap / surplus',
       expression: `${Math.round(target)} − ${Math.round(startProjected)} + ${Math.round(effectiveIobDrop)} + ${Math.round(preDraw)} − ${Math.round(adrenergicCredit)}`,
       value: `${rawDeficit > 0 ? '−' : '+'}${Math.abs(Math.round(rawDeficit))} mg/dL`,
+      hint: 'The distance from the target after every correction has been applied. A positive gap means carbohydrate is needed.',
     },
     {
       label: '1 g per 3.5 mg/dL',
       expression: `${Math.round(needGramsRaw)} g raw need ${trendAdjust !== 0 ? `(trend correction ${trendAdjust > 0 ? '+' : ''}${trendAdjust} g)` : ''}`,
       value: `${preGrams} g (cap ${preCap} g)`,
+      hint: 'The gap divided by the glucose rise per gram, then rounded to 5 g and capped for a single dose.',
     },
   ];
 
@@ -484,6 +535,7 @@ export function buildPlan(raw = {}) {
       preCap,
       sensitivity,
       durationH,
+      carbShare: carbShape.share,
     },
     status,
     preCarb,
@@ -512,6 +564,8 @@ export function simulate(input, plan) {
   const carbFactor = plan.carbFactor;
   const oxidation = plan.oxidation;
   const trend = plan.trend;
+  const carbShape = plan.carbShape || { lagExtra: 0, durMul: 1, share: 1 };
+  const sens = plan.sensitivity || sport.sensitivity;
   const exStart = input.leadTimeMin;
   const exEnd = exStart + input.durationMin;
   const horizon = input.durationMin + HORIZON_AFTER_MIN;
@@ -519,6 +573,13 @@ export function simulate(input, plan) {
   const events = [];
   if (plan.preCarb.grams > 0) {
     events.push({ minute: Math.max(0, exStart - plan.preCarb.timingMin), grams: plan.preCarb.grams, kind: 'pre' });
+  }
+  if (plan.preCarb.split) {
+    events.push({
+      minute: Math.max(0, exStart - plan.preCarb.timingMin + plan.preCarb.split.afterMin),
+      grams: plan.preCarb.split.grams,
+      kind: 'pre',
+    });
   }
   plan.during.schedule.forEach((s) => events.push({ minute: exStart + s.minute, grams: s.grams, kind: 'during' }));
 
@@ -535,7 +596,7 @@ export function simulate(input, plan) {
     const dropPerMin = (input.iob * input.isf) / (input.diaHours * 60);
     for (let t = 0; t <= horizon; t += STEP_MIN) {
       const drift = trend.rate * Math.exp(-t / 30);
-      const mul = sensitivityAt(t, exStart, exEnd, sport.sensitivity);
+      const mul = sensitivityAt(t, exStart, exEnd, sens);
       let delta = 0;
 
       // active insulin
@@ -554,10 +615,14 @@ export function simulate(input, plan) {
       // carbohydrate absorption
       if (withCarbs) {
         for (const e of events) {
-          const lag = e.kind === 'pre' ? 10 : 5;
-          const dur = e.kind === 'pre' ? 35 : 30;
+          // Pre-exercise carbohydrate follows the chosen carb type; in-session
+          // fuel is always fast (gel, drink, glucose tablet).
+          const lag = (e.kind === 'pre' ? 10 + carbShape.lagExtra : 5);
+          const dur = e.kind === 'pre' ? 35 * carbShape.durMul : 30;
           if (t >= e.minute + lag && t < e.minute + lag + dur) {
-            const share = e.kind === 'pre' ? RULES.PRE_PLASMA_SHARE : RULES.DURING_PLASMA_SHARE;
+            const share =
+              (e.kind === 'pre' ? RULES.PRE_PLASMA_SHARE : RULES.DURING_PLASMA_SHARE) *
+              (e.kind === 'pre' ? carbShape.share : 1);
             delta += (e.grams / dur) * carbFactor * share;
           }
         }
@@ -778,6 +843,13 @@ function buildWarnings({ input, sport, trend, ketoneRisk, simulation, risks, sta
   if (input.iobEstimated) {
     w.push({ level: 'info', title: 'Estimated IOB', text: 'No IOB entered: cautious mode assumed 1.5 U. Enter the exact value from your pump or app.' });
   }
+  if (input.heat) {
+    w.push({
+      level: 'info',
+      title: 'Hot conditions',
+      text: 'Heat speeds up insulin absorption: check 15 minutes earlier than planned and add electrolytes to your fluid.',
+    });
+  }
   return w;
 }
 
@@ -799,6 +871,7 @@ export function planToText(plan) {
     preCarb.mode === 'treat'
       ? 'HYPOGLYCEMIA FIRST: 15–20 g fast carbohydrate, recheck in 15 min'
       : `BEFORE EXERCISE: ${preCarb.grams > 0 ? `${preCarb.grams} g fast carbohydrate, ${preCarb.timingMin} min before` : 'no extra carbohydrate needed'}`,
+    `CARB TYPE: ${preCarb.carbType === 'slow' ? 'slow — start 10–15 min earlier' : 'fast — peaks in ~15 min'}${preCarb.split ? ` · split: ${preCarb.grams} g now + ${preCarb.split.grams} g at +${preCarb.split.afterMin} min` : ''}`,
     basal.applicable
       ? `BASAL: ${basal.reductionPercent}% reduction, start ${basal.startBeforeMin} min before${basal.tempRate ? ` (${basal.tempRate} U/h)` : ''}`
       : 'BASAL: no pump — carb strategy applies',

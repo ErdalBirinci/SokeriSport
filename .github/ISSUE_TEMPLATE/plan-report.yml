@@ -1,0 +1,44 @@
+name: Report a questionable plan
+description: A simulation output looks wrong or unsafe to you.
+title: "[plan] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. This is an **educational simulator**, not a medical device — for an
+        urgent health problem contact your care team instead of opening an issue.
+
+        Do not paste personal medical details you would not share publicly.
+
+  - type: textarea
+    id: inputs
+    attributes:
+      label: Simulator inputs
+      description: The values you entered (glucose, trend arrow, IOB, sport, duration, intensity, time until exercise, ketones, pump/basal).
+      placeholder: |
+        glucose 128 mg/dL, trend ↘, IOB 1.8 U, Basketball, 75 min, High, 20 min, ketones none, pump 0.9 U/h
+    validations:
+      required: true
+
+  - type: textarea
+    id: output
+    attributes:
+      label: What the plan said
+      description: Status, carbohydrate dose, basal scenario, simulated nadir.
+      placeholder: |
+        Status "Start with caution", 25 g before exercise, basal −55%, nadir 71 mg/dL
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected and why
+      description: Reference a guideline, your care team's advice, or the formula you think is wrong.
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Shown in the service worker / footer of the science page (e.g. sokerisport-v1.6.0).

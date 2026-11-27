@@ -53,6 +53,28 @@ export function pushHistory(entry) {
   return loadHistory();
 }
 
+/**
+ * Merges a patch into one entry (used to record what actually happened after
+ * a session). An `outcome` patch is merged field by field so partial updates
+ * keep earlier values.
+ */
+export function updateHistoryEntry(ts, patch) {
+  const list = loadHistory();
+  const index = list.findIndex((entry) => entry.ts === ts);
+  if (index === -1) return list;
+
+  const entry = list[index];
+  list[index] = { ...entry, ...patch };
+  if (patch.outcome) list[index].outcome = { ...(entry.outcome || {}), ...patch.outcome };
+
+  safeWrite(HISTORY_KEY, list);
+  return list;
+}
+
+export function findHistoryEntry(ts) {
+  return loadHistory().find((entry) => entry.ts === ts) || null;
+}
+
 export function clearHistory() {
   safeWrite(HISTORY_KEY, []);
   return [];
