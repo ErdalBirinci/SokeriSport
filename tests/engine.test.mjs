@@ -231,6 +231,24 @@ test('the basal scenario carries a step timeline and a pump program', () => {
   assert.deepEqual(noPump.basal.steps, []);
 });
 
+test('the pre-exercise dose is never scheduled after the start', () => {
+  for (const leadTimeMin of [0, 5, 10, 20]) {
+    const plan = buildPlan({ ...base, glucose: 95, iob: 1, leadTimeMin });
+    assert.ok(plan.preCarb.timingMin >= 0, 'timing cannot be negative');
+    assert.ok(plan.preCarb.timingMin <= leadTimeMin, `timing ${plan.preCarb.timingMin} > lead ${leadTimeMin}`);
+  }
+
+  const immediate = buildPlan({ ...base, glucose: 95, iob: 1, leadTimeMin: 0 });
+  assert.equal(immediate.preCarb.timingMin, 0);
+  assert.ok(immediate.preCarb.grams > 0);
+  assert.match(immediate.preCarb.note, /take this dose now/i);
+});
+
+test('the shared text names the chosen carbohydrate source', () => {
+  const slow = buildPlan({ ...base, glucose: 110, iob: 1, carbType: 'slow' });
+  assert.match(planToText(slow), /g slow carbohydrate/);
+});
+
 test('carbohydrate type and heat are normalised', () => {
   const input = normalizeInput({ ...base, carbType: 'unknown', heat: 'yes' });
   assert.equal(input.carbType, 'fast');

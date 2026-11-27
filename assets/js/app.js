@@ -31,8 +31,9 @@ import {
   importSnapshot,
 } from './storage.js';
 import { outcomeStats, accuracyBand } from './stats.js';
-
-const APP_VERSION = '1.6.0';
+import { sanitizeState, encodeScenario, decodeScenario } from './scenario.js';
+import { historyToCsv } from './csv.js';
+import { APP_VERSION } from './version.js';
 
 /* ------------------------------------------------------------------ */
 /* State                                                               */
@@ -149,7 +150,7 @@ function buildControls() {
   els.trends.innerHTML = TRENDS.map(
     (t) => `
       <button type="button" class="trend-btn" data-trend="${t.id}" role="radio" aria-checked="false"
-        title="${t.label} · ${t.hint}">
+        aria-label="${t.label} — ${t.hint}" title="${t.label} · ${t.hint}">
         <span>${t.glyph}</span>
         <small>${t.rate > 0 ? '+' : ''}${t.rate}</small>
       </button>`,
@@ -209,6 +210,15 @@ function enableRoving(container, selector) {
   });
 }
 
+/** Unit buttons carry their state for assistive technology, not only a class. */
+function paintUnitToggle() {
+  document.querySelectorAll('[data-unit]').forEach((button) => {
+    const on = button.dataset.unit === state.unit;
+    button.classList.toggle('is-active', on);
+    button.setAttribute('aria-pressed', String(on));
+  });
+}
+
 const isTyping = (el) => document.activeElement === el;
 
 /** Writes a value without stealing focus from the active field. */
@@ -216,6 +226,27 @@ function setField(el, value) {
   if (isTyping(el)) return;
   const next = String(value);
   if (el.value !== next) el.value = next;
+}
+
+/**
+ * Clamps a typed number to the field's own min/max when the field is left.
+ * Keeps the visible value and the stored state in step, so a saved history
+ * entry can never claim a glucose the engine never used.
+ */
+function clampOnChange(el, apply, label = '') {
+  if (!el) return;
+  el.addEventListener('change', () => {
+    const value = readNumber(el, null);
+    if (value === null) return;
+    const min = Number(el.min);
+    const max = Number(el.max);
+    const bounded = Math.min(max, Math.max(min, value));
+    if (!Number.isFinite(bounded) || bounded === value) return;
+    apply(bounded);
+    el.value = String(bounded);
+    render();
+    toast(`Adjusted to ${bounded}${label ? ` ${label}` : ''}`);
+  });
 }
 
 /** Writes the state into the form fields (also used when the unit changes). */
@@ -238,11 +269,17 @@ function syncForm() {
   setField(els.weightKg, state.weightKg);
   setField(els.isf, disp.isf());
   els.isf.step = isMmol() ? '0.1' : '1';
+  // The numeric range follows the unit, otherwise the mmol field inherits the
+  // mg/dL bounds (3–300) and rejects a valid 2.5 mmol/L/U.
+  els.isf.min = isMmol() ? '0.2' : '3';
+  els.isf.max = isMmol() ? '16.7' : '300';
   els.isfUnit.textContent = isMmol() ? 'mmol/L/U' : 'mg/dL/U';
   setField(els.carbRatio, state.carbRatio);
   setField(els.diaHours, state.diaHours);
   setField(els.targetGlucose, disp.target());
   els.targetGlucose.step = isMmol() ? '0.1' : '1';
+  els.targetGlucose.min = isMmol() ? '5' : '90';
+  els.targetGlucose.max = isMmol() ? '12.2' : '220';
   els.targetUnit.textContent = unitText();
   els.ketones.value = state.ketones;
   if (els.carbType) {
@@ -264,10 +301,11 @@ function syncForm() {
   });
 
   els.sportCatHint.textContent = CATEGORIES[SPORT_BY_ID[state.sport].category].label;
-  const lvl = INTENSITIES.find((i) => i.id === state.intensity);
+  const lvl = INTENSITIES.find((i) => i.id === state.intensity) || INTENSITIES[0];
   els.intensityHint.textContent = `${lvl.rpe} · ${lvl.hint}`;
 
   updateActiveFlags();
+  paintUnitToggle();
 }
 
 /* ------------------------------------------------------------------ */
@@ -314,11 +352,15 @@ function paint() {
   const doseLabel =
     plan.preCarb.grams > 0 ? `${plan.preCarb.grams}<small>g</small>` : `0<small>g</small>`;
 
+  const carbSource =
+    plan.preCarb.carbType === 'slow' ? 'Slow-acting carbohydrate' : 'Fast-acting carbohydrate';
+  const doseTiming =
+    plan.preCarb.timingMin === 0 ? 'Now — before exercise' : `${plan.preCarb.timingMin} min before exercise`;
   const doseMeta =
     plan.preCarb.mode === 'treat'
       ? `<b>Now — before exercise</b>15–20 g fast carbohydrate · recheck in 15 min`
       : plan.preCarb.grams > 0
-        ? `<b>${plan.preCarb.timingMin} min before exercise</b>Fast-acting carbohydrate · ceiling ${plan.preCarb.cap} g`
+        ? `<b>${doseTiming}</b>${carbSource} · ceiling ${plan.preCarb.cap} g`
         : `<b>No extra carbohydrate needed</b>Glucose is enough for this session · see the in-session plan`;
 
   const duringValue = plan.during.needed ? `${plan.during.perHour}<small>g/h</small>` : `—`;
@@ -326,7 +368,9 @@ function paint() {
     plan.preCarb.mode === 'treat'
       ? 'Take it now · recheck in 15 min'
       : plan.preCarb.grams > 0
-        ? `take it ${plan.preCarb.timingMin} min before`
+        ? plan.preCarb.timingMin === 0
+          ? 'Take it now'
+          : `take it ${plan.preCarb.timingMin} min before`
         : 'No extra dose needed';
   const basalValue = plan.basal.applicable ? `−${plan.basal.reductionPercent}%` : `—`;
 
@@ -561,7 +605,8 @@ function doseCopy(p) {
 
 function sensitivityText() {
   const sens = SPORT_BY_ID[state.sport].sensitivity.toFixed(2);
-  return `${Math.round(isMmol() ? toMmol(state.isf) : state.isf)} ${isMmol() ? 'mmol/L' : 'mg/dL'}/U × ${sens}`;
+  const isf = isMmol() ? toMmol(state.isf).toFixed(1) : Math.round(state.isf);
+  return `${isf} ${isMmol() ? 'mmol/L' : 'mg/dL'}/U × ${sens}`;
 }
 
 function drawChart() {
@@ -608,9 +653,13 @@ function alternativesHtml() {
 function applyAlternative(id) {
   const alt = currentAlternatives.find((item) => item.id === id);
   if (!alt) return;
-  const patch = { ...alt.patch };
-  if ('glucose' in patch) patch.glucose = isMmol() ? fromMmol(patch.glucose) : patch.glucose;
-  Object.assign(state, patch);
+  // Alternatives are produced by the engine in mg/dL, which is what state
+  // stores; the display unit is applied only at the form boundary.
+  const patch = { ...alt.patch, unit: state.unit };
+  // "Wait for the IOB to fall" sets a concrete value: cautious mode would
+  // otherwise keep overwriting it with the assumed 1.5 U.
+  if ('iob' in patch) patch.iobEstimated = false;
+  Object.assign(state, sanitizeState(patch, state));
   syncForm();
   render();
   toast(`Applied: ${alt.label.toLowerCase()}`);
@@ -642,58 +691,13 @@ function chartSummaryText() {
 
 /** URL-safe copy of the current scenario (health data: the user chooses to share it). */
 function shareUrl() {
-  const params = new URLSearchParams();
-  params.set('u', state.unit);
-  params.set('g', String(disp.glucose()));
-  params.set('tr', state.trend);
-  params.set('iob', String(state.iob));
-  params.set('s', state.sport);
-  params.set('d', String(state.durationMin));
-  params.set('i', String(state.intensity));
-  params.set('l', String(state.leadTimeMin));
-  params.set('k', state.ketones);
-  params.set('p', state.pump ? '1' : '0');
-  params.set('b', String(state.basalRate));
-  params.set('isf', String(disp.isf()));
-  params.set('dia', String(state.diaHours));
-  params.set('w', String(state.weightKg));
-  params.set('tg', String(disp.target()));
-  params.set('ct', state.carbType);
-  if (state.heat) params.set('ht', '1');
-  return `${location.origin}${location.pathname}#${params.toString()}`;
+  return `${location.origin}${location.pathname}#${encodeScenario(state)}`;
 }
 
+/** Applies a share link; a partial or hand-edited hash cannot break the form. */
 function applyHash() {
-  const raw = location.hash.replace(/^#/, '');
-  if (!raw) return false;
-  const params = new URLSearchParams(raw);
-  if (!params.has('g')) return false;
-
-  const unit = params.get('u') === 'mmol' ? 'mmol' : 'mgdl';
-  const conv = (value) => (unit === 'mmol' ? fromMmol(value) : value);
-  const num = (key, fallback) => {
-    const value = Number(params.get(key));
-    return Number.isFinite(value) ? value : fallback;
-  };
-
-  const next = { ...state, unit };
-  next.glucose = conv(num('g', state.glucose));
-  next.trend = TRENDS.some((t) => t.id === params.get('tr')) ? params.get('tr') : next.trend;
-  next.iob = num('iob', next.iob);
-  next.sport = SPORT_BY_ID[params.get('s')] ? params.get('s') : next.sport;
-  next.durationMin = num('d', next.durationMin);
-  next.intensity = num('i', next.intensity);
-  next.leadTimeMin = num('l', next.leadTimeMin);
-  next.ketones = params.get('k') || next.ketones;
-  next.pump = params.get('p') !== '0';
-  next.basalRate = num('b', next.basalRate);
-  next.isf = conv(num('isf', next.isf));
-  next.diaHours = num('dia', next.diaHours);
-  next.weightKg = num('w', next.weightKg);
-  next.targetGlucose = conv(num('tg', next.targetGlucose));
-  next.carbType = params.get('ct') === 'slow' ? 'slow' : 'fast';
-  next.heat = params.get('ht') === '1';
-
+  const next = decodeScenario(location.hash, state);
+  if (!next) return false;
   Object.assign(state, next);
   return true;
 }
@@ -723,6 +727,7 @@ function diagnosticsText() {
         targetGlucose: state.targetGlucose,
         carbType: state.carbType,
         heat: state.heat,
+        iobEstimated: state.iobEstimated,
       },
       plan: plan
         ? {
@@ -883,7 +888,15 @@ function exportBackup() {
 
 async function importBackup(file) {
   if (!file) return;
-  const text = await file.text();
+  if (!window.confirm('Restoring replaces the profile and simulations stored on this device. Continue?')) return;
+
+  let text;
+  try {
+    text = await file.text();
+  } catch {
+    toast('That file could not be read');
+    return;
+  }
   const result = importSnapshot(text);
   if (!result.ok) {
     toast(
@@ -893,9 +906,10 @@ async function importBackup(file) {
     );
     return;
   }
-  renderHistory();
-  renderStats();
-  renderCompareOptions();
+  // The imported profile is what the form should now show.
+  Object.assign(state, sanitizeState(loadProfile() ?? {}, state));
+  syncForm();
+  render();
   toast(`Backup restored — ${result.restored} simulations`);
 }
 
@@ -982,10 +996,18 @@ function buildBand(raw, main) {
   return { low, high };
 }
 
-/** Screen-reader announcement for the verdict (aria-live region). */
+/**
+ * Screen-reader announcement for the verdict (aria-live region). Debounced:
+ * announcing every keystroke would interrupt the user with partial sentences.
+ */
+let announceTimer = null;
 function announce() {
   if (!els.srStatus || !plan) return;
-  els.srStatus.textContent = `${plan.status.title}. ${plan.status.headline} ${plan.status.detail}`;
+  clearTimeout(announceTimer);
+  announceTimer = setTimeout(() => {
+    if (!plan || !els.srStatus) return;
+    els.srStatus.textContent = `${plan.status.title}. ${plan.status.headline} ${plan.status.detail}`;
+  }, 600);
 }
 
 /** "How did it go" card: plan vs what actually happened. */
@@ -1004,7 +1026,7 @@ function outcomeCard() {
           <p>${lastSavedTs ? 'Compare the plan with what actually happened' : 'Save the result first, then log the outcome'}</p>
         </div>
       </div>
-      <div class="outcome" ${disabled}>
+      <div class="outcome" ${lastSavedTs ? '' : 'aria-disabled="true"'}>
         <label><span>Start glucose (${unit})</span>
           <input type="number" inputmode="decimal" data-outcome="start" value="${outcomeDraft.start}" ${disabled} />
         </label>
@@ -1027,12 +1049,15 @@ function outcomeCard() {
 function outcomeSummary(entry) {
   const o = entry.outcome || {};
   const parts = [];
+  const G = (value) => formatGlucose(value, state.unit);
   if (Number.isFinite(o.start) && Number.isFinite(entry.glucose)) {
-    parts.push(`start ${Math.round(o.start)} instead of ${Math.round(entry.glucose)} ${unitText()}`);
+    parts.push(`start ${G(o.start)} instead of ${G(entry.glucose)}`);
   }
   if (Number.isFinite(o.min) && Number.isFinite(entry.plannedNadir)) {
-    const diff = Math.round(o.min - entry.plannedNadir);
-    parts.push(`lowest ${Math.round(o.min)} (plan ${Math.round(entry.plannedNadir)}, ${diff >= 0 ? '+' : ''}${diff})`);
+    const diff = o.min - entry.plannedNadir;
+    parts.push(
+      `lowest ${G(o.min)} (plan ${G(entry.plannedNadir)}, ${diff >= 0 ? '+' : '-'}${glucoseNumber(Math.abs(diff), state.unit)})`,
+    );
   }
   if (Number.isFinite(o.carbs) && Number.isFinite(entry.plannedCarbs)) {
     parts.push(`${Math.round(o.carbs)} g carbohydrate (plan ${entry.plannedCarbs} g)`);
@@ -1082,11 +1107,13 @@ function bind() {
     state.glucose = isMmol() ? fromMmol(v) : v;
     render();
   });
+  clampOnChange(els.glucose, (v) => (state.glucose = isMmol() ? fromMmol(v) : v), unitText());
 
   els.iob.addEventListener('input', () => {
     state.iob = readNumber(els.iob, state.iob);
     render();
   });
+  clampOnChange(els.iob, (v) => (state.iob = v), 'U');
 
   els.iobUnknown.addEventListener('change', () => {
     state.iobEstimated = els.iobUnknown.checked;
@@ -1125,6 +1152,7 @@ function bind() {
       setter(v);
       render();
     });
+    clampOnChange(el, setter);
   });
 
   els.ketones.addEventListener('change', () => {
@@ -1142,9 +1170,6 @@ function bind() {
     btn.addEventListener('click', () => {
       if (state.unit === btn.dataset.unit) return;
       state.unit = btn.dataset.unit;
-      document.querySelectorAll('[data-unit]').forEach((b) => {
-        b.classList.toggle('is-active', b.dataset.unit === state.unit);
-      });
       syncForm();
       render();
     });
@@ -1220,7 +1245,7 @@ function bind() {
       if (!preset) return;
       const found = PRESETS.find((item) => item.id === preset.dataset.preset);
       if (!found) return;
-      Object.assign(state, found.patch);
+      Object.assign(state, sanitizeState({ ...found.patch, unit: state.unit }, state));
       syncForm();
       render();
       dismissOnboarding();
@@ -1234,7 +1259,7 @@ function bind() {
   enableRoving(els.carbType, '[data-carb]');
 
   els.resetBtn.addEventListener('click', () => {
-    Object.assign(state, DEFAULTS, { pump: DEFAULTS.pump });
+    Object.assign(state, sanitizeState(DEFAULTS));
     syncForm();
     render();
     toast('Settings reset to defaults');
@@ -1246,8 +1271,16 @@ function bind() {
   });
 
   els.clearHistory.addEventListener('click', () => {
+    if (loadHistory().length === 0) {
+      toast('History is already empty');
+      return;
+    }
+    // Destructive and local-only: ask, and point at the backup first.
+    if (!window.confirm('Delete every simulation stored on this device? Export a backup first if you want to keep them.')) return;
     clearHistory();
+    lastSavedTs = null;
     renderHistory();
+    paint();
     toast('History cleared');
   });
 
@@ -1256,7 +1289,7 @@ function bind() {
     if (!btn) return;
     const entry = loadHistory().find((h) => h.ts === Number(btn.dataset.load));
     if (!entry) return;
-    Object.assign(state, entry.state);
+    Object.assign(state, sanitizeState({ ...entry.state, unit: state.unit }, state));
     syncForm();
     render();
     toast('Simulation restored');
@@ -1276,6 +1309,12 @@ function bind() {
     );
     barObserver.observe(els.results);
   }
+
+  // The profile write is debounced: a quick tab close must not lose the last edit.
+  window.addEventListener('pagehide', flushProfile);
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) flushProfile();
+  });
 
   let resizeTimer = null;
   window.addEventListener('resize', () => {
@@ -1306,25 +1345,7 @@ function bind() {
 
 async function copyPlan() {
   if (!plan) return;
-  const text = planToText(plan);
-  try {
-    await navigator.clipboard.writeText(text);
-    toast('Plan copied to clipboard');
-  } catch {
-    const ta = document.createElement('textarea');
-    ta.value = text;
-    ta.style.position = 'fixed';
-    ta.style.opacity = '0';
-    document.body.appendChild(ta);
-    ta.select();
-    try {
-      document.execCommand('copy');
-      toast('Plan copied to clipboard');
-    } catch {
-      toast('Copy failed — select the text manually');
-    }
-    ta.remove();
-  }
+  await copyText(planToText(plan), 'Plan copied to clipboard');
 }
 
 function profilePayload() {
@@ -1345,35 +1366,81 @@ function profilePayload() {
   };
 }
 
+let storageWarned = false;
+
+/** Local writes are best-effort: say so instead of losing data silently. */
+function warnStorageBlocked() {
+  if (storageWarned) return;
+  storageWarned = true;
+  if (els.storageNotice) {
+    els.storageNotice.hidden = false;
+    els.storageNotice.textContent =
+      'This browser blocked local storage: settings and history will not be kept after a reload. The simulator and CSV export still work.';
+  }
+  toast('Local storage is unavailable — nothing is being saved');
+}
+
+function flushProfile() {
+  if (!saveTimer) return;
+  clearTimeout(saveTimer);
+  saveTimer = null;
+  if (!saveProfile(profilePayload())) warnStorageBlocked();
+}
+
 function scheduleSave() {
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => saveProfile(profilePayload()), 700);
+  saveTimer = setTimeout(flushProfile, 700);
 }
 
 function saveResult() {
   if (!plan) return;
   const ts = Date.now();
-  pushHistory({
+  // Persist the values the engine actually used, not a transient typed value
+  // the user has not left yet (e.g. 9000 before the field clamps to 600).
+  const used = plan.input;
+  const result = pushHistory({
     ts,
     sport: plan.sport.name,
     sportGlyph: plan.sport.glyph,
-    glucose: Math.round(state.glucose),
+    glucose: Math.round(used.glucose),
     carbs: plan.preCarb.grams,
     level: plan.status.level,
     status: plan.status.title,
-    durationMin: state.durationMin,
+    durationMin: used.durationMin,
     intensity: plan.level.label,
     plannedCarbs: plan.preCarb.grams + plan.during.total,
     plannedNadir: Math.round(plan.simulation.nadir),
     plannedPeak: Math.round(plan.simulation.peak),
     duringPerHour: plan.during.perHour,
     basalPercent: plan.basal.reductionPercent,
-    state: { ...state },
+    state: {
+      ...state,
+      glucose: used.glucose,
+      iob: used.iob,
+      isf: used.isf,
+      carbRatio: used.carbRatio,
+      weightKg: used.weightKg,
+      durationMin: used.durationMin,
+      leadTimeMin: used.leadTimeMin,
+      basalRate: used.basalRate,
+      diaHours: used.diaHours,
+      targetGlucose: used.targetGlucose,
+    },
   });
+
+  if (!result.ok) {
+    toast('Could not save: local storage is full or blocked');
+    return;
+  }
+
   lastSavedTs = ts;
   Object.assign(outcomeDraft, { start: '', min: '', carbs: '', hypo: false });
   paint();
-  toast('Simulation added to history');
+  toast(
+    result.dropped
+      ? 'Saved — the oldest simulation was dropped'
+      : 'Simulation added to history',
+  );
 }
 
 /** Merges the "how did it go" form into the saved history entry. */
@@ -1413,40 +1480,8 @@ function exportCsv() {
     toast('No simulations to export');
     return;
   }
-  const header = [
-    'date',
-    'sport',
-    'duration_min',
-    'intensity',
-    'glucose_mgdl',
-    'planned_carbs_g',
-    'planned_per_hour_g',
-    'planned_basal_percent',
-    'planned_nadir_mgdl',
-    'actual_start_mgdl',
-    'actual_lowest_mgdl',
-    'actual_carbs_g',
-    'hypo_reported',
-  ];
-  const lines = rows.map((h) =>
-    [
-      new Date(h.ts).toISOString(),
-      `"${h.sport}"`,
-      h.durationMin ?? '',
-      `"${h.intensity ?? ''}"`,
-      Math.round(h.glucose),
-      h.plannedCarbs ?? h.carbs,
-      h.duringPerHour ?? '',
-      h.basalPercent ?? '',
-      h.plannedNadir ?? '',
-      h.outcome?.start ?? '',
-      h.outcome?.min ?? '',
-      h.outcome?.carbs ?? '',
-      h.outcome?.hypo ? 'yes' : 'no',
-    ].join(','),
-  );
 
-  const blob = new Blob([[header.join(','), ...lines].join('\n')], { type: 'text/csv;charset=utf-8' });
+  const blob = new Blob([historyToCsv(rows)], { type: 'text/csv;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
@@ -1472,7 +1507,7 @@ function renderHistory() {
         <button type="button" class="link-btn" data-load="${h.ts}" title="Restore this simulation">
           ${h.sportGlyph || '•'} ${h.sport}
         </button>
-        <b>${Math.round(h.glucose)} → ${h.carbs} g</b>
+        <b>${glucoseNumber(h.glucose, state.unit)} ${isMmol() ? 'mmol/L' : 'mg/dL'} → ${h.carbs} g</b>
         ${badge}
         <time>${new Date(h.ts).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</time>
       </li>`;
@@ -1499,16 +1534,10 @@ function paintNetwork() {
 /* ------------------------------------------------------------------ */
 
 function init() {
+  // A profile from an older build, a corrupted key or a hand-edited value must
+  // never reach the renderer: sanitize before the first paint.
   const saved = loadProfile();
-  if (saved && typeof saved === 'object') {
-    Object.keys(DEFAULTS).forEach((k) => {
-      if (saved[k] !== undefined) state[k] = saved[k];
-    });
-    // if a unit was saved, start the interface with it
-    document.querySelectorAll('[data-unit]').forEach((b) => {
-      b.classList.toggle('is-active', b.dataset.unit === state.unit);
-    });
-  }
+  if (saved) Object.assign(state, sanitizeState(saved, DEFAULTS));
 
   const fromLink = applyHash();
 

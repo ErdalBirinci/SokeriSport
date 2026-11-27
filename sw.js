@@ -3,7 +3,7 @@
  * The app shell is kept in the cache; works in offline places like the pitch or the gym.
  */
 
-const VERSION = 'sokerisport-v1.7.3';
+const VERSION = 'sokerisport-v1.7.4';
 const SHELL = [
   './',
   './index.html',
@@ -15,6 +15,9 @@ const SHELL = [
   './assets/css/landing.css',
   './assets/css/app.css',
   './assets/js/engine.js',
+  './assets/js/scenario.js',
+  './assets/js/csv.js',
+  './assets/js/version.js',
   './assets/js/chart.js',
   './assets/js/storage.js',
   './assets/js/stats.js',
@@ -54,6 +57,26 @@ self.addEventListener('message', (event) => {
   if (event.data === 'SKIP_WAITING') self.skipWaiting();
 });
 
+/**
+ * Cached page for a navigation. Static hosts serve the same page under two
+ * names: GitHub Pages uses /app.html, Sites redirects /app.html → /app. Trying
+ * both keeps every page reachable offline, not just the page that was opened.
+ */
+async function cachedPage(url) {
+  const exact = await caches.match(url.pathname, { ignoreSearch: true });
+  if (exact) return exact;
+
+  const candidates = url.pathname.endsWith('/')
+    ? [`${url.pathname}index.html`]
+    : [`${url.pathname}.html`, `${url.pathname}/index.html`];
+  for (const candidate of candidates) {
+    const hit = await caches.match(candidate, { ignoreSearch: true });
+    if (hit) return hit;
+  }
+
+  return caches.match('./index.html');
+}
+
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   if (request.method !== 'GET') return;
@@ -67,14 +90,15 @@ self.addEventListener('fetch', (event) => {
       (async () => {
         try {
           const fresh = await fetch(request);
-          const cache = await caches.open(VERSION);
-          cache.put(request, fresh.clone());
+          // Never cache an error page as if it were the route.
+          if (fresh && fresh.ok) {
+            const cache = await caches.open(VERSION);
+            cache.put(request, fresh.clone());
+          }
           return fresh;
         } catch {
-          const cached = await caches.match(request);
+          const cached = await cachedPage(url);
           if (cached) return cached;
-          const fallback = await caches.match('./index.html');
-          if (fallback) return fallback;
           return new Response('Offline. SokeriSport could not be loaded.', {
             status: 503,
             headers: { 'Content-Type': 'text/plain; charset=utf-8' },

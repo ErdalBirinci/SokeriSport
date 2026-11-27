@@ -38,6 +38,7 @@ Any change to a number in `RULES`, `SPORTS`, `CATEGORIES` or `TRENDS` requires:
 | 2026-11-27 | Engine extracted, thresholds documented, 17 engine tests | Initial implementation | Erdal Birinci |
 | 2026-11-27 | Slow carbohydrate, heat and split pre-dose added (all `[V]`) | Modelling improvements requested in review | Erdal Birinci |
 | 2026-11-27 | Golden fixtures (10 scenarios) and a performance bound added | Make silent clinical drift impossible to merge | Erdal Birinci |
+| 2026-11-27 | Pre-dose timing clamped to the time actually left before exercise | No threshold changed: the old text could advise a dose "10 min before" a start that was 5 min away. Test pins the bound | Erdal Birinci |
 
 ## Open questions for a reviewer
 

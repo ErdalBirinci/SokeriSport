@@ -302,6 +302,8 @@ export function buildPlan(raw = {}) {
 
 
   const timingMin = input.durationMin >= 90 || sport.category === 'ENDURANCE' ? 25 : 15;
+  // Never advise a dose "before" a start that is already closer than the dose.
+  const preTimingMin = Math.max(0, Math.min(timingMin, input.leadTimeMin));
   /** Above the single-dose ceiling a second, smaller portion is scheduled. */
   const splitGrams =
     preCapped && gramsUncapped - preCap >= 15 ? Math.min(20, Math.round((gramsUncapped - preCap) / 5) * 5) : 0;
@@ -312,7 +314,7 @@ export function buildPlan(raw = {}) {
   const preCarb = {
     mode: preGrams > 0 ? 'exercise' : 'none',
     grams: preGrams,
-    timingMin: Math.min(timingMin, Math.max(10, input.leadTimeMin)),
+    timingMin: preTimingMin,
     capped: preCapped,
     uncappedGrams: Math.round(gramsUncapped),
     cap: preCap,
@@ -321,7 +323,7 @@ export function buildPlan(raw = {}) {
     note:
       preGrams === 0
         ? 'No extra carbohydrate advised before exercise. Your glucose range does not call for it.'
-        : `${carbNote} ${preCapped ? 'Your need is above the ceiling: too much in one dose upsets the stomach, so the rest is split.' : ''}`.trim(),
+        : `${preTimingMin === 0 ? 'Take this dose now: there is no time left before the start. ' : ''}${carbNote} ${preCapped ? 'Your need is above the ceiling: too much in one dose upsets the stomach, so the rest is split.' : ''}`.trim(),
   };
 
   // In hypoglycemia the treatment protocol applies, not the exercise plan.
@@ -958,7 +960,11 @@ export function planToText(plan) {
     '',
     preCarb.mode === 'treat'
       ? 'HYPOGLYCEMIA FIRST: 15–20 g fast carbohydrate, recheck in 15 min'
-      : `BEFORE EXERCISE: ${preCarb.grams > 0 ? `${preCarb.grams} g fast carbohydrate, ${preCarb.timingMin} min before` : 'no extra carbohydrate needed'}`,
+      : `BEFORE EXERCISE: ${
+          preCarb.grams > 0
+            ? `${preCarb.grams} g ${preCarb.carbType} carbohydrate, ${preCarb.timingMin === 0 ? 'now' : `${preCarb.timingMin} min before`}`
+            : 'no extra carbohydrate needed'
+        }`,
     `CARB TYPE: ${preCarb.carbType === 'slow' ? 'slow — start 10–15 min earlier' : 'fast — peaks in ~15 min'}${preCarb.split ? ` · split: ${preCarb.grams} g now + ${preCarb.split.grams} g at +${preCarb.split.afterMin} min` : ''}`,
     basal.applicable
       ? `BASAL: ${basal.reductionPercent}% reduction, start ${basal.startBeforeMin} min before${basal.tempRate ? ` (${basal.tempRate} U/h)` : ''}`

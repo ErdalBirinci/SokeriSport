@@ -54,6 +54,9 @@ assets/css/landing.css     Landing + documentation layout, 3D scene
 assets/css/app.css         Simulator interface
 
 assets/js/engine.js        ★ Deterministic rule engine + simulation (pure, side-effect free)
+assets/js/scenario.js      State sanitising + share-link encode/decode (pure)
+assets/js/csv.js           CSV export with formula-safe escaping (pure)
+assets/js/version.js       Version shown in diagnostics (guarded against package.json)
 assets/js/chart.js         Dependency-free canvas timeline
 assets/js/storage.js       localStorage profile + history
 assets/js/app.js           Simulator interface
@@ -77,6 +80,9 @@ tests/golden.test.mjs      Golden plans + a performance bound
 tests/fixtures/             Golden scenarios, snapshot shape and expected output
 .github/workflows/ci.yml   Tests, link check and cache-busting guard
 tests/engine.test.mjs      Engine tests
+tests/scenario.test.mjs    State sanitising and share-link round-trips
+tests/csv.test.mjs         CSV columns and spreadsheet-formula escaping
+tests/version.test.mjs     Version and offline-shell guards
 tests/language.test.mjs    Turkish-text and legacy-unit guard
 ```
 
@@ -165,6 +171,9 @@ counter-regulation is added; the result is clamped to 40–350 mg/dL.
   migration for entries written by older builds.
 - **Diagnostics and share links** — one tap copies a support payload (version, inputs, plan) or a
   link that contains the current scenario. The link contains health values: sharing is a choice.
+- **Validated restore** — a profile, share link or imported backup is sanitised field by field:
+  unknown sports, malformed units and out-of-range numbers fall back to safe values instead of
+  breaking the form. Clearing the history or restoring a backup asks for confirmation first.
 
 ## Sport profiles
 
@@ -189,7 +198,7 @@ counter-regulation is added; the result is clamped to 40–350 mg/dL.
 - `manifest.webmanifest`: standalone, theme colour, shortcuts, maskable icon.
 - `sw.js`: app shell cache; network-first for navigations, cache-first for static assets with a
   silent background update.
-- Data lives only in `localStorage`: profile + the last 12 simulations. Nothing goes to a server.
+- Data lives only in `localStorage`: profile + the last 50 simulations. Nothing goes to a server.
 
 ---
 

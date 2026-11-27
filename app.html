@@ -38,8 +38,8 @@
           </span>
 
           <div class="unit-toggle" role="group" aria-label="Glucose unit">
-            <button type="button" data-unit="mgdl" class="is-active">mg/dL</button>
-            <button type="button" data-unit="mmol">mmol/L</button>
+            <button type="button" data-unit="mgdl" class="is-active" aria-pressed="true">mg/dL</button>
+            <button type="button" data-unit="mmol" aria-pressed="false">mmol/L</button>
           </div>
 
           <a class="btn btn--ghost btn--sm topbar__link" href="science.html">Science</a>
@@ -50,7 +50,7 @@
     <main class="layout">
       <!-- LEFT: form ----------------------------------------------- -->
       <form class="form" id="form" autocomplete="off" novalidate>
-        <p class="notice" id="storageNotice" hidden></p>
+        <p class="notice" id="storageNotice" role="status" hidden></p>
 
         <section class="onboarding" id="onboarding" hidden aria-label="Example scenarios"></section>
         <section class="panel">
@@ -276,7 +276,7 @@
       </form>
 
       <!-- RIGHT: results -------------------------------------------- -->
-      <aside class="results" id="results">
+      <aside class="results" id="results" tabindex="-1">
         <noscript>
           <div class="panel">This simulator requires JavaScript.</div>
         </noscript>

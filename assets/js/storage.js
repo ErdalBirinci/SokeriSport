@@ -7,7 +7,7 @@
 
 const PROFILE_KEY = 'sokerisport.profile.v1';
 const HISTORY_KEY = 'sokerisport.history.v1';
-const MAX_HISTORY = 12;
+export const MAX_HISTORY = 50;
 
 /** Bump when the shape of a stored entry changes; add a migration step below. */
 export const SCHEMA_VERSION = 2;
@@ -96,11 +96,18 @@ export function loadHistory() {
   return raw.map(migrateEntry).filter(Boolean);
 }
 
+/**
+ * Adds an entry at the top of the history.
+ * @returns {{ok: boolean, list: Array<object>, dropped: number}} `ok` is false
+ * when the browser refused the write (quota, private mode): the caller must not
+ * claim that the simulation was saved.
+ */
 export function pushHistory(entry) {
   const list = loadHistory();
   list.unshift(migrateEntry(entry));
-  safeWrite(HISTORY_KEY, list.slice(0, MAX_HISTORY));
-  return loadHistory();
+  const kept = list.slice(0, MAX_HISTORY);
+  const ok = safeWrite(HISTORY_KEY, kept);
+  return { ok, list: ok ? kept : loadHistory(), dropped: Math.max(0, list.length - kept.length) };
 }
 
 /**
