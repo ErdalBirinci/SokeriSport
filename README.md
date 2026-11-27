@@ -11,6 +11,7 @@ Vanilla JavaScript + PWA. No build step, no framework, no dependencies, no serve
 
 ## Running
 
+**Live:** https://erdalbirinci.github.io/SokeriSport/
 
 ```bash
 node server.mjs          # http://127.0.0.1:5173
