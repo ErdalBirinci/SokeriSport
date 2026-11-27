@@ -237,13 +237,12 @@ The app is plain static files, so any static host can serve the repository root;
 node scripts/build.mjs   # copies only public files into dist/
 ```
 
-`deploy.manifest.json` defines the Worker entry (`worker.js` → `env.ASSETS.fetch`) and the `dist/`
-folder. When releasing a new version:
+`scripts/build.mjs` writes a self-contained `dist/` folder for hosts that want a separate upload
+directory. When releasing a new version:
 
 1. Make the change and run `node scripts/build.mjs`.
 2. Bump `VERSION` in `sw.js` — otherwise clients keep seeing the cached old assets (static assets
    are cache-first).
-3. Redeploy the manifest and verify the publication status.
 
 ## Sources
 
