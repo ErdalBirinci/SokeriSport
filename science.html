@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Rule Engine and Sources — SokeriSport</title>
+    <meta name="description" content="Thresholds, formulas, modelling assumptions and clinical references behind the SokeriSport deterministic rule engine." />
+    <meta name="theme-color" content="#F7F8FC" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="assets/css/base.css" />
+    <link rel="stylesheet" href="assets/css/landing.css" />
+  </head>
+  <body class="landing landing--docs">
+    <div class="aurora" aria-hidden="true">
+      <span class="aurora__blob aurora__blob--1"></span>
+      <span class="aurora__blob aurora__blob--2"></span>
+    </div>
+
+    <header class="nav">
+      <div class="nav__inner">
+        <a class="brand" href="./">
+          <span class="brand__mark" aria-hidden="true">
+            <svg viewBox="0 0 32 32" fill="none">
+              <circle cx="16" cy="16" r="11.5" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="56 16" transform="rotate(-52 16 16)" />
+              <path d="M9 17.6h4l2.2-5 3.2 9 2.2-4h3.4" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+          </span>
+          <span class="brand__name">Sokeri<strong>Sport</strong></span>
+        </a>
+        <nav class="nav__links" aria-label="Main menu">
+          <a href="./">Home</a>
+          <a href="app.html">Simulator</a>
+          <a href="#rules">Rules</a>
+          <a href="#formulas">Formulas</a>
+          <a href="#sources">Sources</a>
+        </nav>
+        <div class="nav__actions">
+          <a class="btn btn--primary btn--sm" href="app.html">
+            Open the simulator
+            <svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3 8h9M8.5 4.5 12 8l-3.5 3.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" /></svg>
+          </a>
+        </div>
+      </div>
+    </header>
+
+    <main class="docs">
+      <header class="docs__head">
+        <p class="eyebrow"><span class="eyebrow__dot"></span>Transparent engine</p>
+        <h1>Rule engine, formulas and sources</h1>
+        <p class="docs__lead">
+          Every output from SokeriSport is derived from the thresholds and formulas below. The
+          engine is a pure function: the same set of inputs always produces the same plan. There is
+          no randomness, no learned model and no server-side personalisation.
+        </p>
+        <div class="docs__meta">
+          <span class="badge badge--ok">Deterministic</span>
+          <span class="badge">Pure JavaScript</span>
+          <span class="badge">Offline</span>
+          <span class="badge">Version 1.0</span>
+        </div>
+      </header>
+
+      <nav class="toc" aria-label="Contents">
+        <a href="#flow">Calculation flow</a>
+        <a href="#rules">Safety thresholds</a>
+        <a href="#formulas">Formulas</a>
+        <a href="#sports">Sport profiles</a>
+        <a href="#trend">Trend arrow table</a>
+        <a href="#model">Simulation model</a>
+        <a href="#limits">Limitations</a>
+        <a href="#sources">Sources</a>
+      </nav>
+
+      <!-- FLOW -->
+      <section class="docs__section" id="flow">
+        <h2>Calculation flow</h2>
+        <ol class="flow">
+          <li><b>Normalisation</b><span>mmol/L → mg/dL, range clamping, defaults for missing fields.</span></li>
+          <li><b>Projection</b><span>Per-minute rate of the trend arrow × time remaining until exercise.</span></li>
+          <li><b>IOB load</b><span>IOB × sensitivity factor × sport multiplier; limited by a safe floor.</span></li>
+          <li><b>Exercise draw</b><span>Oxidation rate × duration × carb/glucose coefficient × muscle share.</span></li>
+          <li><b>Carb dose</b><span>Net gap ÷ carb coefficient; body-weight cap and trend correction.</span></li>
+          <li><b>Basal scenario</b><span>Category baseline + duration/IOB/glucose adjustments, clamped to 0–80%.</span></li>
+          <li><b>Simulation</b><span>Planned and unplanned glucose curves in 5-minute steps, risk scores, warnings.</span></li>
+        </ol>
+      </section>
+
+      <!-- RULES -->
+      <section class="docs__section" id="rules">
+        <h2>Safety thresholds</h2>
+        <p class="docs__note">
+          These thresholds are applied in order during the pre-exercise assessment; the first
+          matching rule decides the verdict.
+        </p>
+        <div class="table-wrap">
+          <table class="table">
+            <thead>
+              <tr><th>Condition</th><th>Decision</th><th>Rationale</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><b>Glucose &lt; 70 mg/dL</b></td>
+                <td><span class="tag tag--stop">No exercise</span></td>
+                <td>Hypoglycemia treatment comes first: 15–20 g fast carbs, recheck after 15 min.</td>
+              </tr>
+              <tr>
+                <td><b>Ketones ≥ moderate and glucose ≥ 250 mg/dL</b></td>
+                <td><span class="tag tag--stop">No exercise</span></td>
+                <td>Risk of ketoacidosis; fluids and ketone monitoring, involve your care team if needed.</td>
+              </tr>
+              <tr>
+                <td><b>Glucose ≥ 300 mg/dL</b></td>
+                <td><span class="tag tag--act">Postpone</span></td>
+                <td>High-intensity exercise is not advised without checking ketones.</td>
+              </tr>
+              <tr>
+                <td><b>Estimated start &lt; 90 mg/dL</b></td>
+                <td><span class="tag tag--act">Take carbs</span></td>
+                <td>Target band is 90–180 mg/dL; starting below it accelerates the fall.</td>
+              </tr>
+              <tr>
+                <td><b>Simulated nadir &lt; 70 mg/dL</b></td>
+                <td><span class="tag tag--act">Plan / postpone</span></td>
+                <td>IOB and muscle draw together produce hypoglycemia.</td>
+              </tr>
+              <tr>
+                <td><b>Simulated nadir &lt; 85 mg/dL or IOB &gt; 2 U</b></td>
+                <td><span class="tag tag--watch">Caution</span></td>
+                <td>Check every 20–30 min, carry backup carbs.</td>
+              </tr>
+              <tr>
+                <td><b>Otherwise</b></td>
+                <td><span class="tag tag--ok">Safe</span></td>
+                <td>Plan is workable; first check recommended within 30 min.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- FORMULAS -->
+      <section class="docs__section" id="formulas">
+        <h2>Formulas</h2>
+        <div class="formula-grid">
+          <div class="formula">
+            <span class="formula__tag">1 · Projection</span>
+            <code>G<sub>start</sub> = G<sub>now</sub> + (r<sub>trend</sub> × t<sub>left</sub>)</code>
+            <p>r is the per-minute rate of the trend arrow (⇊ −3 … ⇈ +3), t is minutes left until exercise.</p>
+          </div>
+
+          <div class="formula">
+            <span class="formula__tag">2 · IOB load</span>
+            <code>D<sub>IOB</sub> = min( IOB × ISF × k<sub>sport</sub> , max(0, G<sub>start</sub> − 85) )</code>
+            <p>
+              k<sub>sport</sub> is the sport's insulin sensitivity multiplier. The upper bound
+              excludes the part that cannot be safely covered with carbohydrate — it does not hide
+              the "no amount of carbs will fix this" case, it turns it into a postpone
+              recommendation.
+            </p>
+          </div>
+
+          <div class="formula">
+            <span class="formula__tag">3 · Muscle draw</span>
+            <code>D<sub>muscle</sub> = O<sub>hour</sub> × t<sub>hour</sub> × K<sub>cho</sub> × 0.35</code>
+            <p>
+              O is hourly carbohydrate oxidation (g/h), K<sub>cho</sub> is the effect of 1 gram of
+              carbohydrate on plasma glucose (≈3.5 mg/dL at 70 kg). 0.35 is the muscle glycogen
+              share.
+            </p>
+          </div>
+
+          <div class="formula">
+            <span class="formula__tag">4 · Carb dose</span>
+            <code>g = ( H − G<sub>start</sub> + D<sub>IOB</sub> + D<sub>muscle</sub> − A ) / K<sub>cho</sub></code>
+            <p>
+              H is the target glucose, A is the catecholamine credit (the temporary rise in the
+              first 20 min of high-intensity sports). The result is rounded to 5 g and capped by
+              <code>min(50 g, 0.6 × kg)</code>.
+            </p>
+          </div>
+
+          <div class="formula">
+            <span class="formula__tag">5 · Basal reduction</span>
+            <code>% = clamp( base + Δduration + ΔIOB + Δglucose , 0 , 80 )</code>
+            <p>
+              Base: high-intensity 50%, endurance 40%, mixed 35%, strength 20%, light 25%.
+              Duration &gt;2.5 h +25, 1.5–2.5 h +15; IOB ≥1.5 U −10; start ≤100 mg/dL +10.
+            </p>
+          </div>
+
+          <div class="formula">
+            <span class="formula__tag">6 · Recovery</span>
+            <code>CHO<sub>after</sub> = kg × (0.3 – 1.2)</code>
+            <p>
+              Between 0.3 g/kg (short) and 1.2 g/kg (2 h+, high intensity) depending on duration and
+              intensity. Sessions over 1 hour add 0.3 g/kg protein (max. 30 g).
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- SPORTS -->
+      <section class="docs__section" id="sports">
+        <h2>Sport profiles</h2>
+        <div class="table-wrap">
+          <table class="table">
+            <thead>
+              <tr><th>Sport</th><th>Category</th><th>Oxidation (g/h)</th><th>Sensitivity ×</th><th>Catecholamine (mg/dL)</th></tr>
+            </thead>
+            <tbody id="sportTableBody"></tbody>
+          </table>
+        </div>
+        <p class="docs__note">
+          Oxidation values refer to moderate intensity (RPE 5–6) and are multiplied by the selected
+          intensity band (×0.7 / ×1.0 / ×1.25 / ×1.45). The sensitivity multiplier and the
+          catecholamine credit are modelling parameters.
+        </p>
+      </section>
+
+      <!-- TREND -->
+      <section class="docs__section" id="trend">
+        <h2>Trend arrow table</h2>
+        <div class="trend-table" id="trendTable"></div>
+      </section>
+
+      <!-- MODEL -->
+      <section class="docs__section" id="model">
+        <h2>Simulation model</h2>
+        <p>
+          The projection advances in 5-minute steps as the sum of four components:
+        </p>
+        <div class="model-flow">
+          <div class="model-flow__node">
+            <b>Insulin</b>
+            <span>IOB is spread evenly over its duration of action; it is amplified by the sensitivity multiplier during exercise.</span>
+          </div>
+          <div class="model-flow__node">
+            <b>Trend</b>
+            <span>The current trend decays to zero with a 30-minute time constant — a temporary event is prevented from lasting forever.</span>
+          </div>
+          <div class="model-flow__node">
+            <b>Muscle draw</b>
+            <span>Constant glucose draw during the session; an adrenaline rise in the first 20 min for high-intensity sports.</span>
+          </div>
+          <div class="model-flow__node">
+            <b>Carbohydrate</b>
+            <span>Pre-load: 10 min delay + 35 min absorption; in-session doses: 5 min delay + 30 min absorption.</span>
+          </div>
+          <div class="model-flow__node">
+            <b>Counter-regulation</b>
+            <span>Below 90 mg/dL a partial physiological defence is added; hypoglycemia is not hidden, but stays realistic.</span>
+          </div>
+        </div>
+        <p class="docs__note">
+          The model is clamped to 40–350 mg/dL. Two curves are then produced, planned and
+          unplanned; the difference between them shows what the app contributes.
+        </p>
+      </section>
+
+      <!-- LIMITS -->
+      <section class="docs__section" id="limits">
+        <h2>Limitations</h2>
+        <ul class="limits">
+          <li>Individual insulin sensitivity varies through the day and with stress, sleep and the menstrual cycle; the engine assumes a constant ISF.</li>
+          <li>IOB is approximated with a single-compartment, linear distribution. The real curve depends on the insulin analogue.</li>
+          <li>Meal carbohydrate, fat/protein content, temperature, altitude and alcohol are not modelled.</li>
+          <li>The simulation covers a 3-hour window; the probability of overnight late hypoglycemia is reported separately as a risk score.</li>
+          <li>Results should be calibrated with your own data: in the first weeks, compare the engine's estimate with your actual CGM trace.</li>
+        </ul>
+        <div class="callout callout--warn">
+          <b>Clinical notice.</b> This app does not diagnose or adjust treatment. Decide on insulin
+          doses, basal changes and carbohydrate amounts together with your diabetes team. If you
+          feel hypoglycemia symptoms (shaking, sweating, confusion), stop exercising and take fast
+          carbohydrate.
+        </div>
+      </section>
+
+      <!-- SOURCES -->
+      <section class="docs__section" id="sources">
+        <h2>Sources</h2>
+        <ol class="cites">
+          <li>Riddell MC, Gallen IW, Smart CE, et al. <i>Exercise management in type 1 diabetes: a consensus statement.</i> Lancet Diabetes Endocrinol. 2017;5(5):377–390.</li>
+          <li>Moser O, Riddell MC, Eckstein ML, et al. <i>Glucose management for exercise using continuous glucose monitoring (CGM) and intermittently scanned CGM (isCGM) systems in type 1 diabetes: position statement of the EASD and ISPAD endorsed by JDRF.</i> Diabetologia. 2020;63:2501–2520.</li>
+          <li>Colberg SR, Sigal RJ, Yardley JE, et al. <i>Physical Activity/Exercise and Diabetes: A Position Statement of the American Diabetes Association.</i> Diabetes Care. 2016;39(11):2065–2079.</li>
+          <li>American Diabetes Association Professional Practice Committee. <i>Glycemic Goals and Hypoglycemia: Standards of Care in Diabetes.</i> Diabetes Care (section updated annually).</li>
+          <li>Battelino T, Danne T, Bergenstal RM, et al. <i>Clinical Targets for Continuous Glucose Monitoring Data Interpretation: Recommendations From the International Consensus on Time in Range.</i> Diabetes Care. 2019;42(8):1593–1603.</li>
+          <li>Yardley JE, Kenny GP, Perkins BA, et al. <i>Resistance versus aerobic exercise: acute effects on glycemia in type 1 diabetes.</i> Diabetes Care. 2013;36(3):537–542.</li>
+          <li>Scott SN, Anderson L, Morton JP, et al. <i>Carbohydrate Intake in the Context of Exercise in People with Type 1 Diabetes.</i> Nutrients. 2019;11(12):3017.</li>
+          <li>Walsh J, Roberts R. <i>Pumping Insulin: Everything You Need for Success on a Smart Insulin Pump.</i> Torrey Pines Press (insulin action curves and the IOB approach).</li>
+        </ol>
+        <p class="docs__note">
+          The sources show the basis for the thresholds and coefficients; SokeriSport is an
+          independent project and is not affiliated with these publishers.
+        </p>
+      </section>
+
+      <div class="docs__cta">
+        <div>
+          <h2>You have seen the rule. Now try it with your own data.</h2>
+          <p>Enter glucose, trend, IOB and sport; every step of the calculation is shown on the result screen.</p>
+        </div>
+        <a class="btn btn--primary btn--lg" href="app.html">
+          Open the simulator
+          <svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3 8h9M8.5 4.5 12 8l-3.5 3.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" /></svg>
+        </a>
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer__bottom">
+        <span>© <span id="year">2026</span> SokeriSport</span>
+        <span>For education · Not a treatment tool</span>
+      </div>
+    </footer>
+
+    <script type="module" src="assets/js/docs.js"></script>
+    <script type="module" src="assets/js/pwa.js"></script>
+  </body>
+</html>

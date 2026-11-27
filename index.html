@@ -1,0 +1,499 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>SokeriSport — Pre-Exercise Glycemic Readiness Simulator</title>
+    <meta
+      name="description"
+      content="A deterministic rule engine that combines glucose, trend arrow, active insulin (IOB) and sport type. Simulates pre-workout carbs and basal reduction scenarios in seconds. Works offline."
+    />
+    <meta name="theme-color" content="#F7F8FC" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="SokeriSport" />
+    <link rel="stylesheet" href="assets/css/base.css" />
+    <link rel="stylesheet" href="assets/css/landing.css" />
+  </head>
+  <body class="landing">
+    <div class="aurora" aria-hidden="true">
+      <span class="aurora__blob aurora__blob--1"></span>
+      <span class="aurora__blob aurora__blob--2"></span>
+      <span class="aurora__blob aurora__blob--3"></span>
+    </div>
+
+    <header class="nav">
+      <div class="nav__inner">
+        <a class="brand" href="./" aria-label="SokeriSport home">
+          <span class="brand__mark" aria-hidden="true">
+            <svg viewBox="0 0 32 32" fill="none">
+              <circle cx="16" cy="16" r="11.5" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="56 16" transform="rotate(-52 16 16)" />
+              <path d="M9 17.6h4l2.2-5 3.2 9 2.2-4h3.4" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+          </span>
+          <span class="brand__name">Sokeri<strong>Sport</strong></span>
+        </a>
+
+        <nav class="nav__links" aria-label="Main menu">
+          <a href="#problem">Problem</a>
+          <a href="#how-it-works">How it works</a>
+          <a href="#features">Features</a>
+          <a href="#sports">Sport profiles</a>
+          <a href="science.html">Science</a>
+        </nav>
+
+        <div class="nav__actions">
+          <a class="btn btn--ghost btn--sm" href="app.html">Simulator</a>
+          <a class="btn btn--primary btn--sm" href="app.html">
+            Start
+            <svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3 8h9M8.5 4.5 12 8l-3.5 3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" /></svg>
+          </a>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <!-- HERO ------------------------------------------------------ -->
+      <section class="hero">
+        <div class="hero__copy">
+          <p class="eyebrow reveal">
+            <span class="eyebrow__dot"></span>
+            Guideline-based · Deterministic · Offline
+          </p>
+          <h1 class="hero__title reveal" style="--d: 60ms">
+            Before training,<br />
+            <span class="grad">plan your blood sugar.</span>
+          </h1>
+          <p class="hero__lead reveal" style="--d: 120ms">
+            Basketball and a marathon do not move blood sugar the same way.
+            SokeriSport combines your <strong>glucose value</strong>, <strong>trend arrow</strong>,
+            <strong>active insulin (IOB)</strong> and <strong>sport type</strong> in a single rule
+            engine, then works out pre-workout carbs and the basal reduction scenario
+            in seconds.
+          </p>
+          <div class="hero__cta reveal" style="--d: 180ms">
+            <a class="btn btn--primary btn--lg" href="app.html">
+              Open the simulator
+              <svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3 8h9M8.5 4.5 12 8l-3.5 3.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" /></svg>
+            </a>
+            <a class="btn btn--soft btn--lg" href="science.html">Explore the rule engine</a>
+          </div>
+          <dl class="hero__stats reveal" style="--d: 240ms">
+            <div><dt>11</dt><dd>sport profiles</dd></div>
+            <div><dt>7</dt><dd>trend arrows</dd></div>
+            <div><dt>0</dt><dd>server dependencies</dd></div>
+          </dl>
+          <p class="hero__note reveal" style="--d: 300ms">
+            <svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 2.5 3.5 4.3v3.9c0 2.6 1.9 4.6 4.5 5.3 2.6-.7 4.5-2.7 4.5-5.3V4.3L8 2.5Z" stroke="currentColor" stroke-width="1.3" /><path d="m6 8 1.5 1.5L10.3 6.7" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" /></svg>
+            Your data never leaves your device. Works in airplane mode, on the pitch and in the gym.
+          </p>
+        </div>
+
+        <!-- 3D scene -->
+        <div class="scene" data-scene aria-hidden="true">
+          <div class="scene__grid"></div>
+          <div class="scene__halo"></div>
+
+          <div class="stage" data-stage>
+            <div class="dash" data-tilt>
+              <div class="dash__top">
+                <div class="dash__brand"><span class="pulse"></span> SokeriSport</div>
+                <div class="dash__pill">LIVE SIMULATION</div>
+              </div>
+
+              <div class="dash__hero">
+                <div class="gauge">
+                  <div class="gauge__inner">
+                    <b>35<small>g</small></b>
+                    <em>before</em>
+                  </div>
+                </div>
+                <div class="dash__meta">
+                  <div class="dash__sport"><span>🏀</span> Basketball <i>75 min</i></div>
+                  <ul class="dash__stats">
+                    <li><span>Glucose</span><b>142</b><i>mg/dL</i></li>
+                    <li><span>IOB</span><b>2.4</b><i>U</i></li>
+                    <li><span>Trend</span><b class="is-down">↘</b><i>−1 /min</i></li>
+                  </ul>
+                </div>
+              </div>
+
+              <div class="dash__chart">
+                <svg viewBox="0 0 320 86" preserveAspectRatio="none">
+                  <defs>
+                    <linearGradient id="areaFade" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stop-color="#2F6BFF" stop-opacity="0.26" />
+                      <stop offset="100%" stop-color="#2F6BFF" stop-opacity="0" />
+                    </linearGradient>
+                  </defs>
+                  <g class="dash__bands">
+                    <rect x="0" y="0" width="320" height="30" fill="rgba(245,158,11,.07)" />
+                    <rect x="0" y="30" width="320" height="34" fill="rgba(16,185,129,.08)" />
+                    <rect x="0" y="64" width="320" height="22" fill="rgba(239,68,68,.07)" />
+                  </g>
+                  <path class="dash__area" d="M0,58 C22,56 38,44 62,40 C86,36 102,28 126,30 C150,32 166,44 190,50 C214,56 230,62 256,58 C280,54 300,50 320,48 L320,86 L0,86 Z" fill="url(#areaFade)" />
+                  <path class="dash__line" d="M0,58 C22,56 38,44 62,40 C86,36 102,28 126,30 C150,32 166,44 190,50 C214,56 230,62 256,58 C280,54 300,50 320,48" fill="none" stroke="#2F6BFF" stroke-width="2.6" stroke-linecap="round" />
+                  <circle cx="62" cy="40" r="4" fill="#fff" stroke="#FF8A3D" stroke-width="2.4" />
+                  <line x1="62" y1="6" x2="62" y2="80" stroke="rgba(255,138,61,.5)" stroke-width="1.2" stroke-dasharray="3 3" />
+                  <circle cx="320" cy="48" r="3.4" fill="#fff" stroke="#2F6BFF" stroke-width="2.2" />
+                </svg>
+              </div>
+
+              <div class="dash__foot">
+                <div class="mini"><span>Before</span><b>35 g</b></div>
+                <div class="mini"><span>During</span><b>20 g/30min</b></div>
+                <div class="mini"><span>Basal</span><b>−45%</b></div>
+              </div>
+            </div>
+
+            <div class="chip chip--risk">
+              <span class="chip__k">Hypo risk</span>
+              <span class="chip__v chip__v--ok">Low</span>
+            </div>
+            <div class="chip chip--glucose">
+              <span class="chip__k">Hour 3</span>
+              <span class="chip__v">118 <i>mg/dL</i></span>
+            </div>
+            <div class="chip chip--iob">
+              <span class="chip__icon">💉</span>
+              <span>IOB 2.4 U<br /><i>≈157 mg/dL effect</i></span>
+            </div>
+
+            <div class="stage__floor"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- PROBLEM --------------------------------------------------- -->
+      <section class="section" id="problem">
+        <header class="section__head reveal">
+          <p class="eyebrow"><span class="eyebrow__dot"></span>Problem</p>
+          <h2>Same glucose, two completely different outcomes.</h2>
+          <p class="section__lead">
+            The rule books say "carbs before exercise", but which sport, which duration, which
+            trend? Any plan that ignores all three variables is half a plan on the field.
+          </p>
+        </header>
+
+        <div class="compare">
+          <article class="compare__card reveal">
+            <div class="compare__tag compare__tag--orange">High-intensity intervals</div>
+            <h3>Basketball · Indoor soccer</h3>
+            <p>
+              In the first 10–20 minutes adrenaline <strong>lifts</strong> glucose; that "I'm
+              fine" feeling is misleading. In the second half muscle glycogen empties and insulin
+              sensitivity rises: the sharp drop usually arrives <strong>at the end of the
+              session</strong>.
+            </p>
+            <ul class="compare__list">
+              <li><span>CHO oxidation</span><b>42–46 g/h</b></li>
+              <li><span>Sensitivity increase</span><b>×1.45</b></li>
+              <li><span>Risk window</span><b>min 60–90</b></li>
+            </ul>
+          </article>
+
+          <article class="compare__card reveal" style="--d: 80ms">
+            <div class="compare__tag compare__tag--blue">Endurance</div>
+            <h3>Cycling · Running</h3>
+            <p>
+              A steady pace lowers glucose <strong>linearly</strong>. There is no adrenaline
+              bump; with IOB on board the drop starts in the first 30 minutes and keeps going at a
+              constant rate. Without hourly carbs, hypoglycemia by minute 45 is almost certain.
+            </p>
+            <ul class="compare__list">
+              <li><span>CHO oxidation</span><b>58–60 g/h</b></li>
+              <li><span>Sensitivity increase</span><b>×1.65–1.70</b></li>
+              <li><span>Risk window</span><b>min 30–60</b></li>
+            </ul>
+          </article>
+
+          <article class="compare__card compare__card--wide reveal" style="--d: 160ms">
+            <div class="iob-visual" aria-hidden="true">
+              <div class="iob-bar"><span style="--w: 78%"></span></div>
+              <div class="iob-bar iob-bar--ghost"><span style="--w: 34%"></span></div>
+              <p class="iob-caption">Ignore IOB and most of the drop is caused by insulin.</p>
+            </div>
+            <div>
+              <div class="compare__tag compare__tag--ink">The most overlooked variable</div>
+              <h3>IOB: the invisible dose</h3>
+              <p>
+                2.4 U of active insulin at 45 mg/dL/U sensitivity means a <strong>108 mg/dL</strong>
+                drop. With the exercise sensitivity multiplier that becomes
+                <strong>157 mg/dL</strong>. Any plan that reads glucose alone ignores this debt.
+              </p>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <!-- HOW IT WORKS ---------------------------------------------- -->
+      <section class="section section--tint" id="how-it-works">
+        <header class="section__head reveal">
+          <p class="eyebrow"><span class="eyebrow__dot"></span>Process</p>
+          <h2>Four steps, one screen.</h2>
+        </header>
+
+        <ol class="steps">
+          <li class="step reveal">
+            <span class="step__n">01</span>
+            <div class="step__icon">🩸</div>
+            <h3>Enter your state</h3>
+            <p>Glucose, trend arrow, IOB and time until exercise. All in one panel.</p>
+          </li>
+          <li class="step reveal" style="--d: 80ms">
+            <span class="step__n">02</span>
+            <div class="step__icon">🏀</div>
+            <h3>Pick the sport</h3>
+            <p>11 profiles, 4 intensity bands, 10–240 min duration. Oxidation rate follows the profile.</p>
+          </li>
+          <li class="step reveal" style="--d: 160ms">
+            <span class="step__n">03</span>
+            <div class="step__icon">⚙️</div>
+            <h3>The engine computes</h3>
+            <p>Guideline thresholds plus deterministic formulas. Every step on screen, broken down.</p>
+          </li>
+          <li class="step reveal" style="--d: 240ms">
+            <span class="step__n">04</span>
+            <div class="step__icon">📈</div>
+            <h3>See the plan</h3>
+            <p>Carbs, basal, during-session fuel and a 3-hour projection. Copy it with one tap.</p>
+          </li>
+        </ol>
+      </section>
+
+      <!-- FEATURES -------------------------------------------------- -->
+      <section class="section" id="features">
+        <header class="section__head reveal">
+          <p class="eyebrow"><span class="eyebrow__dot"></span>Features</p>
+          <h2>Details that matter on the field.</h2>
+        </header>
+
+        <div class="features">
+          <article class="feature reveal">
+            <div class="feature__icon feature__icon--blue">
+              <svg viewBox="0 0 24 24" fill="none"><path d="M4 7h16M4 12h10M4 17h13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" /><circle cx="19" cy="12" r="2" stroke="currentColor" stroke-width="1.8" /></svg>
+            </div>
+            <h3>Deterministic engine</h3>
+            <p>No randomness, no hidden coefficients. The same input always produces the same plan — you can argue with it.</p>
+          </article>
+
+          <article class="feature reveal" style="--d: 60ms">
+            <div class="feature__icon feature__icon--violet">
+              <svg viewBox="0 0 24 24" fill="none"><path d="M12 3v6m0 6v6M3 12h6m6 0h6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" /><circle cx="12" cy="12" r="3.2" stroke="currentColor" stroke-width="1.8" /></svg>
+            </div>
+            <h3>IOB aware</h3>
+            <p>Active insulin is converted into a projected drop using the sport's sensitivity multiplier, with a safe floor.</p>
+          </article>
+
+          <article class="feature reveal" style="--d: 120ms">
+            <div class="feature__icon feature__icon--teal">
+              <svg viewBox="0 0 24 24" fill="none"><path d="M4 19V9m5 10V5m5 14v-7m5 7V8" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" /></svg>
+            </div>
+            <h3>Basal scenario</h3>
+            <p>If you pump, the temporary basal percentage, start time and U/h equivalent are ready to go.</p>
+          </article>
+
+          <article class="feature reveal" style="--d: 180ms">
+            <div class="feature__icon feature__icon--orange">
+              <svg viewBox="0 0 24 24" fill="none"><path d="M3 16l5-6 4 4 3-5 6 7" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" /><path d="M3 20h18" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" /></svg>
+            </div>
+            <h3>3-hour projection</h3>
+            <p>Planned and unplanned scenarios side by side. See where the drop starts instead of guessing.</p>
+          </article>
+
+          <article class="feature reveal" style="--d: 240ms">
+            <div class="feature__icon feature__icon--slate">
+              <svg viewBox="0 0 24 24" fill="none"><path d="M12 3a9 9 0 1 0 9 9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" /><path d="M12 7v5l3.5 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" /></svg>
+            </div>
+            <h3>Offline PWA</h3>
+            <p>The service worker caches every file. It opens in the basement of the gym too.</p>
+          </article>
+
+          <article class="feature reveal" style="--d: 300ms">
+            <div class="feature__icon feature__icon--pink">
+              <svg viewBox="0 0 24 24" fill="none"><path d="M6 4h9l3 3v13H6z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" /><path d="M9 12h6M9 16h4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" /></svg>
+            </div>
+            <h3>Shareable plan</h3>
+            <p>Copy the result as plain text and send it to your coach or your family in one message.</p>
+          </article>
+        </div>
+      </section>
+
+      <!-- SPORTS ---------------------------------------------------- -->
+      <section class="section section--tint" id="sports">
+        <header class="section__head reveal">
+          <p class="eyebrow"><span class="eyebrow__dot"></span>Sport profiles</p>
+          <h2>Every sport has its own curve.</h2>
+          <p class="section__lead">
+            Carbohydrate oxidation and the insulin sensitivity multiplier differ by sport.
+            The engine uses both values directly.
+          </p>
+        </header>
+
+        <div class="sports" id="sportGridLanding">
+          <!-- filled by JS -->
+        </div>
+        <p class="sports__foot reveal">
+          Values are hourly oxidation rates at moderate intensity (RPE 5–6); the intensity band multiplies them.
+          <a href="science.html#sports">Read the method →</a>
+        </p>
+      </section>
+
+      <!-- SCIENCE --------------------------------------------------- -->
+      <section class="section" id="science">
+        <div class="science">
+          <div class="science__copy reveal">
+            <p class="eyebrow"><span class="eyebrow__dot"></span>Evidence</p>
+            <h2>Thresholds from guidelines,<br />assumptions written in plain sight.</h2>
+            <p>
+              The engine uses the thresholds from Riddell et al.'s consensus statement on exercise
+              management in type 1 diabetes and the EASD/ISPAD CGM position statement. Wherever
+              modelling is involved (muscle draw, IOB distribution) the assumption is labelled
+              explicitly.
+            </p>
+            <ul class="science__list">
+              <li><b>&lt;70 mg/dL</b><span>Exercise contraindicated — treat hypoglycemia first</span></li>
+              <li><b>90–180 mg/dL</b><span>Pre-exercise target band</span></li>
+              <li><b>&gt;250 mg/dL</b><span>Check ketones; no exercise if positive</span></li>
+              <li><b>0.5–1.2 g/kg</b><span>Recovery carbohydrate range</span></li>
+            </ul>
+            <a class="btn btn--soft" href="science.html">
+              Full rule table and sources
+              <svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3 8h9M8.5 4.5 12 8l-3.5 3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" /></svg>
+            </a>
+          </div>
+
+          <div class="science__card reveal" style="--d: 100ms">
+            <div class="science__cardTop">
+              <span>Reference summary</span>
+              <span class="badge badge--ok">8 sources</span>
+            </div>
+            <ol class="refs">
+              <li>
+                <span>2017</span>
+                <div><b>Riddell MC et al.</b> Exercise management in type 1 diabetes: a consensus statement. <i>Lancet Diabetes Endocrinol</i>.</div>
+              </li>
+              <li>
+                <span>2020</span>
+                <div><b>Moser O et al.</b> Glucose management for exercise using CGM. <i>Diabetologia</i>.</div>
+              </li>
+              <li>
+                <span>2016</span>
+                <div><b>Colberg SR et al.</b> Physical Activity/Exercise and Diabetes. <i>Diabetes Care</i>.</div>
+              </li>
+            </ol>
+            <a class="science__more" href="science.html#sources">All 8 sources →</a>
+          </div>
+        </div>
+      </section>
+
+      <!-- FAQ ------------------------------------------------------- -->
+      <section class="section section--tint" id="faq">
+        <header class="section__head reveal">
+          <p class="eyebrow"><span class="eyebrow__dot"></span>FAQ</p>
+          <h2>Common questions.</h2>
+        </header>
+
+        <div class="faq">
+          <details class="faq__item" open>
+            <summary>Does this app give medical advice?</summary>
+            <p>
+              No. SokeriSport is an education and simulation tool; it does not diagnose or adjust
+              treatment. Work with your diabetes team on insulin and carbohydrate decisions. In an
+              emergency, call your local emergency number.
+            </p>
+          </details>
+          <details class="faq__item">
+            <summary>Where do I find my IOB value?</summary>
+            <p>
+              Your insulin pump, smart pen or diabetes app (e.g. CamAPS, Control-IQ, Loop, mySugr)
+              shows active insulin. If you do not know it, the "I don't know my IOB" option assumes
+              1.5 U in cautious mode and states that clearly.
+            </p>
+          </details>
+          <details class="faq__item">
+            <summary>Which sports are supported?</summary>
+            <p>
+              Basketball, indoor soccer, football, tennis, cycling, running, swimming, rowing, HIIT,
+              strength training and walking. Each profile carries a different carbohydrate oxidation
+              rate and insulin sensitivity multiplier.
+            </p>
+          </details>
+          <details class="faq__item">
+            <summary>Where does my data go?</summary>
+            <p>
+              Nowhere. The app runs entirely in your browser; your profile and history stay in your
+              device's local storage. A connection is only needed for the first load, then it works
+              offline.
+            </p>
+          </details>
+          <details class="faq__item">
+            <summary>I don't use a pump — is it still useful?</summary>
+            <p>
+              Yes. The carb plan, trend projection, in-session fueling and late-hypoglycemia
+              warnings work without a pump. The basal scenario only appears for pump users.
+            </p>
+          </details>
+        </div>
+      </section>
+
+      <!-- CTA ------------------------------------------------------- -->
+      <section class="cta">
+        <div class="cta__card reveal">
+          <div class="cta__glow" aria-hidden="true"></div>
+          <p class="eyebrow eyebrow--onlight"><span class="eyebrow__dot"></span>Ready</p>
+          <h2>20 minutes before training,<br />one screen.</h2>
+          <p>No sign-up, no setup, no server. Open it in your browser, enter your values, get the plan.</p>
+          <div class="cta__actions">
+            <a class="btn btn--primary btn--lg" href="app.html">
+              Open the simulator
+              <svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3 8h9M8.5 4.5 12 8l-3.5 3.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" /></svg>
+            </a>
+            <a class="btn btn--soft btn--lg" href="science.html">Read the method first</a>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <div class="footer__inner">
+        <div class="footer__brand">
+          <a class="brand" href="./">
+            <span class="brand__mark" aria-hidden="true">
+              <svg viewBox="0 0 32 32" fill="none">
+                <circle cx="16" cy="16" r="11.5" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="56 16" transform="rotate(-52 16 16)" />
+                <path d="M9 17.6h4l2.2-5 3.2 9 2.2-4h3.4" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            </span>
+            <span class="brand__name">Sokeri<strong>Sport</strong></span>
+          </a>
+          <p>Pre-exercise glycemic readiness simulator.<br />For education only, not a treatment tool.</p>
+        </div>
+        <nav class="footer__links" aria-label="Footer menu">
+          <div>
+            <h4>App</h4>
+            <a href="app.html">Simulator</a>
+            <a href="science.html">Rule engine</a>
+            <a href="science.html#sources">Sources</a>
+          </div>
+          <div>
+            <h4>Learn</h4>
+            <a href="#problem">Problem</a>
+            <a href="#how-it-works">How it works</a>
+            <a href="#faq">FAQ</a>
+          </div>
+        </nav>
+      </div>
+      <div class="footer__bottom">
+        <span>© <span id="year">2026</span> SokeriSport</span>
+        <span>Guideline-based education tool · Data stays on your device</span>
+      </div>
+    </footer>
+
+    <script type="module" src="assets/js/landing.js"></script>
+    <script type="module" src="assets/js/pwa.js"></script>
+  </body>
+</html>

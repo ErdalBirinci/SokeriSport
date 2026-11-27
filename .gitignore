@@ -1,0 +1,13 @@
+# Build output
+dist/
+
+# Verification screenshots
+screens/
+
+# Dependencies and local tooling state
+node_modules/
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+*.log

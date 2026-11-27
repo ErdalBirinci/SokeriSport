@@ -1,0 +1,16 @@
+{
+  "name": "sokerisport",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "SokeriSport — pre-exercise glycemic readiness simulator (vanilla JS + PWA).",
+  "scripts": {
+    "dev": "node server.mjs",
+    "start": "node server.mjs",
+    "test": "node --test \"tests/**/*.test.mjs\"",
+    "icons": "node scripts/make-icons.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
