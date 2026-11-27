@@ -1,0 +1,281 @@
+{
+  "morning-run-iob": {
+    "level": "watch",
+    "title": "Start with caution",
+    "preGrams": 40,
+    "preTiming": 20,
+    "split": 0,
+    "duringPerHour": 60,
+    "duringTotal": 60,
+    "schedule": [
+      "30:30",
+      "65:30"
+    ],
+    "basalPercent": 35,
+    "basalStart": 60,
+    "basalEnd": 45,
+    "afterCarbs": 60,
+    "afterProtein": 22,
+    "risks": [
+      49,
+      52,
+      0
+    ],
+    "nadir": 80.3,
+    "nadirAt": 235,
+    "peak": 164.5,
+    "end": 84.3,
+    "baselineNadir": 40
+  },
+  "basketball-steady": {
+    "level": "safe",
+    "title": "You are ready",
+    "preGrams": 0,
+    "preTiming": 25,
+    "split": 0,
+    "duringPerHour": 60,
+    "duringTotal": 60,
+    "schedule": [
+      "25:30",
+      "55:30"
+    ],
+    "basalPercent": 65,
+    "basalStart": 45,
+    "basalEnd": 45,
+    "afterCarbs": 60,
+    "afterProtein": 22,
+    "risks": [
+      3,
+      36,
+      0
+    ],
+    "nadir": 122.1,
+    "nadirAt": 235,
+    "peak": 167.6,
+    "end": 122.1,
+    "baselineNadir": 67.9
+  },
+  "cycling-long": {
+    "level": "safe",
+    "title": "You are ready",
+    "preGrams": 30,
+    "preTiming": 25,
+    "split": 0,
+    "duringPerHour": 60,
+    "duringTotal": 150,
+    "schedule": [
+      "30:30",
+      "65:30",
+      "100:30",
+      "135:30",
+      "170:30"
+    ],
+    "basalPercent": 65,
+    "basalStart": 90,
+    "basalEnd": 45,
+    "afterCarbs": 60,
+    "afterProtein": 22,
+    "risks": [
+      6,
+      40,
+      0
+    ],
+    "nadir": 103.3,
+    "nadirAt": 220,
+    "peak": 173.3,
+    "end": 130.2,
+    "baselineNadir": 40
+  },
+  "low-start": {
+    "level": "act",
+    "title": "Take carbs before you start",
+    "preGrams": 44,
+    "preTiming": 15,
+    "split": 0,
+    "duringPerHour": 18,
+    "duringTotal": 10,
+    "schedule": [
+      "30:10"
+    ],
+    "basalPercent": 30,
+    "basalStart": 30,
+    "basalEnd": 30,
+    "afterCarbs": 35,
+    "afterProtein": 0,
+    "risks": [
+      76,
+      18,
+      0
+    ],
+    "nadir": 56.3,
+    "nadirAt": 5,
+    "peak": 141.7,
+    "end": 125.9,
+    "baselineNadir": 40
+  },
+  "hypo-stop": {
+    "level": "stop",
+    "title": "Treat the hypoglycemia first",
+    "preGrams": 15,
+    "preTiming": 0,
+    "split": 0,
+    "duringPerHour": 60,
+    "duringTotal": 30,
+    "schedule": [
+      "30:30"
+    ],
+    "basalPercent": 60,
+    "basalStart": 60,
+    "basalEnd": 45,
+    "afterCarbs": 60,
+    "afterProtein": 22,
+    "risks": [
+      63,
+      42,
+      0
+    ],
+    "nadir": 57.9,
+    "nadirAt": 25,
+    "peak": 97.5,
+    "end": 97.5,
+    "baselineNadir": 40
+  },
+  "ketones-high": {
+    "level": "stop",
+    "title": "Do not exercise",
+    "preGrams": 0,
+    "preTiming": 25,
+    "split": 0,
+    "duringPerHour": 60,
+    "duringTotal": 60,
+    "schedule": [
+      "45:30",
+      "75:30"
+    ],
+    "basalPercent": 40,
+    "basalStart": 45,
+    "basalEnd": 45,
+    "afterCarbs": 60,
+    "afterProtein": 22,
+    "risks": [
+      18,
+      46,
+      15
+    ],
+    "nadir": 100.3,
+    "nadirAt": 235,
+    "peak": 280.7,
+    "end": 102.4,
+    "baselineNadir": 63.8
+  },
+  "hyper-no-ketones": {
+    "level": "act",
+    "title": "Check your ketones first",
+    "preGrams": 0,
+    "preTiming": 15,
+    "split": 0,
+    "duringPerHour": 40,
+    "duringTotal": 20,
+    "schedule": [
+      "45:20"
+    ],
+    "basalPercent": 45,
+    "basalStart": 45,
+    "basalEnd": 30,
+    "afterCarbs": 60,
+    "afterProtein": 22,
+    "risks": [
+      2,
+      20,
+      25
+    ],
+    "nadir": 179.5,
+    "nadirAt": 235,
+    "peak": 300.6,
+    "end": 179.5,
+    "baselineNadir": 174
+  },
+  "slow-carbs-heat": {
+    "level": "act",
+    "title": "Take carbs before you start",
+    "preGrams": 44,
+    "preTiming": 25,
+    "split": 0,
+    "duringPerHour": 60,
+    "duringTotal": 90,
+    "schedule": [
+      "30:30",
+      "65:30",
+      "100:30"
+    ],
+    "basalPercent": 65,
+    "basalStart": 90,
+    "basalEnd": 45,
+    "afterCarbs": 90,
+    "afterProtein": 22,
+    "risks": [
+      80,
+      68,
+      0
+    ],
+    "nadir": 59.1,
+    "nadirAt": 140,
+    "peak": 103.9,
+    "end": 83.5,
+    "baselineNadir": 40
+  },
+  "mdi-no-pump": {
+    "level": "safe",
+    "title": "You are ready",
+    "preGrams": 30,
+    "preTiming": 20,
+    "split": 0,
+    "duringPerHour": 60,
+    "duringTotal": 30,
+    "schedule": [
+      "30:30"
+    ],
+    "basalPercent": 45,
+    "basalStart": 60,
+    "basalEnd": 45,
+    "afterCarbs": 60,
+    "afterProtein": 22,
+    "risks": [
+      8,
+      28,
+      0
+    ],
+    "nadir": 143.4,
+    "nadirAt": 235,
+    "peak": 194.2,
+    "end": 143.4,
+    "baselineNadir": 64.1
+  },
+  "heavy-iob-iod": {
+    "level": "act",
+    "title": "Follow the plan or postpone",
+    "preGrams": 30,
+    "preTiming": 10,
+    "split": 0,
+    "duringPerHour": 41,
+    "duringTotal": 20,
+    "schedule": [
+      "30:20"
+    ],
+    "basalPercent": 15,
+    "basalStart": 30,
+    "basalEnd": 30,
+    "afterCarbs": 35,
+    "afterProtein": 0,
+    "risks": [
+      98,
+      54,
+      0
+    ],
+    "nadir": 44.1,
+    "nadirAt": 225,
+    "peak": 189.2,
+    "end": 44.1,
+    "baselineNadir": 40
+  }
+}

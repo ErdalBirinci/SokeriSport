@@ -11,7 +11,7 @@
         var path = location.pathname;
         var base = path.indexOf('/SokeriSport/') === 0 ? '/SokeriSport/' : '/';
         var page = path.slice(base.length).replace(/\/+$/, '');
-        if (page === 'app' || page === 'science') {
+        if (page === 'app' || page === 'science' || page === 'guide') {
           location.replace(base + page + '.html' + location.search + location.hash);
           return;
         }

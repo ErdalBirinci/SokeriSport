@@ -8,6 +8,7 @@ import assert from 'node:assert/strict';
 import {
   buildPlan,
   simulate,
+  suggestAlternatives,
   normalizeInput,
   toMmol,
   carbGlucoseFactor,
@@ -197,6 +198,37 @@ test('every calculation row explains itself', () => {
     assert.ok(row.label && row.expression && row.value, `incomplete row: ${row.label}`);
     assert.ok(row.hint && row.hint.length > 20, `missing hint: ${row.label}`);
   }
+});
+
+test('the counterfactual list only contains verdict improvements', () => {
+  const risky = { ...base, glucose: 128, trend: 'slowDown', iob: 3, sport: 'kosu', durationMin: 90, intensity: 4 };
+  const level = (input) => buildPlan(input).status.level;
+  const rank = { stop: 0, act: 1, watch: 2, safe: 3 };
+
+  const options = suggestAlternatives(risky);
+  assert.ok(options.length > 0, 'expected at least one alternative');
+  assert.ok(options.length <= 3, 'at most three alternatives');
+
+  for (const option of options) {
+    const patched = buildPlan({ ...normalizeInput(risky), unit: 'mgdl', ...option.patch });
+    assert.ok(rank[patched.status.level] > rank[level(risky)], `${option.label} should improve the verdict`);
+    assert.ok(option.detail.length > 3);
+  }
+});
+
+test('a safe plan has no alternatives to suggest', () => {
+  const safe = buildPlan({ ...base, glucose: 150, trend: 'flat', iob: 0, sport: 'yuruyus', durationMin: 30, intensity: 2 });
+  assert.equal(safe.status.level, 'safe');
+  assert.deepEqual(suggestAlternatives({ ...base, glucose: 150, trend: 'flat', iob: 0, sport: 'yuruyus', durationMin: 30, intensity: 2 }), []);
+});
+
+test('the basal scenario carries a step timeline and a pump program', () => {
+  const plan = buildPlan({ ...base, durationMin: 90, intensity: 3 });
+  assert.equal(plan.basal.steps.length, 3);
+  assert.equal(plan.basal.steps[1].percent, plan.basal.reductionPercent);
+  assert.match(plan.basal.programText, /Temporary basal/);
+  const noPump = buildPlan({ ...base, pump: false });
+  assert.deepEqual(noPump.basal.steps, []);
 });
 
 test('carbohydrate type and heat are normalised', () => {

@@ -384,6 +384,21 @@ export function buildPlan(raw = {}) {
     endAfterMin,
     tempRate,
     currentRate: input.basalRate,
+    steps: input.pump
+      ? [
+          { id: 'before', label: 'Before', fromMin: -startBeforeMin, toMin: 0, percent: reduction },
+          { id: 'session', label: 'Session', fromMin: 0, toMin: input.durationMin, percent: reduction },
+          { id: 'after', label: 'After', fromMin: input.durationMin, toMin: input.durationMin + endAfterMin, percent: Math.round(reduction / 2) },
+        ]
+      : [],
+    programText: input.pump
+      ? [
+          `Temporary basal: ${reduction}% reduction${tempRate ? ` (${tempRate} U/h from ${input.basalRate} U/h)` : ''}`,
+          `Start: ${startBeforeMin} min before exercise`,
+          `End: ${endAfterMin} min after the finish, then back to ${input.basalRate} U/h`,
+          `Session: ${input.durationMin} min · ${CATEGORIES[sport.category].label}`,
+        ].join('\n')
+      : 'No pump: basal protocol does not apply.',
     note: input.pump
       ? `Temporary basal: ${reduction}% reduction → ${tempRate} U/h. Ramp the reduction back up gradually after high-intensity and long sessions.`
       : 'Without an insulin pump the basal protocol does not apply: the carb strategy and bolus timing are the basis.',
@@ -851,6 +866,79 @@ function buildWarnings({ input, sport, trend, ketoneRisk, simulation, risks, sta
     });
   }
   return w;
+}
+
+/* ------------------------------------------------------------------ */
+/* Counterfactuals — "what would change the verdict?"                  */
+/* ------------------------------------------------------------------ */
+
+const LEVEL_RANK = { stop: 0, act: 1, watch: 2, safe: 3 };
+
+/**
+ * Re-runs the same deterministic engine against small, realistic changes and
+ * keeps the ones that improve the verdict. No new clinical claim: every
+ * variant goes through the same thresholds and formulas.
+ */
+export function suggestAlternatives(raw = {}, limit = 3) {
+  const base = buildPlan(raw);
+  const baseRank = LEVEL_RANK[base.status.level];
+  if (baseRank >= LEVEL_RANK.safe) return [];
+
+  const input = { ...base.input, unit: 'mgdl' };
+  const found = [];
+
+  const add = (label, patch, detail) => {
+    const next = buildPlan({ ...input, ...patch });
+    const rank = LEVEL_RANK[next.status.level];
+    if (rank <= baseRank) return;
+    found.push({
+      id: label.toLowerCase().replace(/[^a-z]+/g, '-').replace(/^-|-$/g, ''),
+      label,
+      detail,
+      patch,
+      gain: rank - baseRank,
+      level: next.status.level,
+      status: next.status.title,
+      grams: next.preCarb.grams,
+      nadir: Math.round(next.simulation.nadir),
+    });
+  };
+
+  if (input.iob > RULES.SAFE_IOB) add('Wait for the IOB to fall', { iob: 0 }, `${round1(input.iob)} U → 0 U`);
+
+  const laterLead = Math.min(180, input.leadTimeMin + 30);
+  if (laterLead > input.leadTimeMin && input.leadTimeMin < 90) {
+    add('Start later', { leadTimeMin: laterLead }, `${input.leadTimeMin} → ${laterLead} min`);
+  }
+
+  const shorter = Math.max(10, Math.round((input.durationMin * 0.6) / 5) * 5);
+  if (shorter < input.durationMin) {
+    add('Shorten the session', { durationMin: shorter }, `${input.durationMin} → ${shorter} min`);
+  }
+
+  if (input.intensity > 1) {
+    add(
+      'One step easier',
+      { intensity: input.intensity - 1 },
+      `${INTENSITY_BY_ID[input.intensity].label} → ${INTENSITY_BY_ID[input.intensity - 1].label}`,
+    );
+  }
+  if (input.carbType === 'slow') add('Switch to fast carbohydrate', { carbType: 'fast' }, 'faster rise before the start');
+  if (input.heat) add('Move out of the heat', { heat: false }, 'normal insulin absorption');
+  if (input.glucose < 100) add('Treat first, then start', { glucose: 110 }, `${Math.round(input.glucose)} → 110 mg/dL`);
+
+  // Combined reset: the same advice the stop path gives when nothing else helps.
+  add(
+    'Treat first, wait, then start',
+    {
+      glucose: Math.max(Math.round(input.glucose), 115),
+      iob: 0,
+      leadTimeMin: Math.max(input.leadTimeMin, 30),
+    },
+    'glucose at or above 115 mg/dL, no IOB, 30 min later',
+  );
+
+  return found.sort((a, b) => b.gain - a.gain || b.nadir - a.nadir).slice(0, limit);
 }
 
 /* ------------------------------------------------------------------ */

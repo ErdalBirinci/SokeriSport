@@ -11,8 +11,10 @@ import {
   CATEGORIES,
   DEFAULTS,
   buildPlan,
+  suggestAlternatives,
   planToText,
   formatGlucose,
+  glucoseNumber,
   toMmol,
   fromMmol,
 } from './engine.js';
@@ -24,7 +26,13 @@ import {
   pushHistory,
   clearHistory,
   updateHistoryEntry,
+  storageAvailable,
+  exportSnapshot,
+  importSnapshot,
 } from './storage.js';
+import { outcomeStats, accuracyBand } from './stats.js';
+
+const APP_VERSION = '1.6.0';
 
 /* ------------------------------------------------------------------ */
 /* State                                                               */
@@ -33,6 +41,7 @@ import {
 const state = { ...DEFAULTS };
 let plan = null;
 let currentBand = null;
+let currentAlternatives = [];
 let showBaseline = true;
 let raf = null;
 let saveTimer = null;
@@ -75,6 +84,16 @@ const els = {
   results: $('results'),
   historySection: $('historySection'),
   historyList: $('historyList'),
+  statsBox: $('statsBox'),
+  compareA: $('compareA'),
+  compareB: $('compareB'),
+  compareOut: $('compareOut'),
+  compareRun: $('compareRun'),
+  backupExport: $('backupExport'),
+  backupImport: $('backupImport'),
+  backupFile: $('backupFile'),
+  storageNotice: $('storageNotice'),
+  onboarding: $('onboarding'),
   historyExport: $('historyExport'),
   clearHistory: $('clearHistory'),
   srStatus: $('srStatus'),
@@ -154,16 +173,39 @@ function updateActiveFlags() {
     const on = b.dataset.trend === state.trend;
     b.classList.toggle('is-active', on);
     b.setAttribute('aria-checked', String(on));
+    b.tabIndex = on ? 0 : -1;
   });
   els.sportPicker.querySelectorAll('[data-sport]').forEach((b) => {
     const on = b.dataset.sport === state.sport;
     b.classList.toggle('is-active', on);
     b.setAttribute('aria-checked', String(on));
+    b.tabIndex = on ? 0 : -1;
   });
   els.intensity.querySelectorAll('[data-intensity]').forEach((b) => {
     const on = Number(b.dataset.intensity) === state.intensity;
     b.classList.toggle('is-active', on);
     b.setAttribute('aria-checked', String(on));
+    b.tabIndex = on ? 0 : -1;
+  });
+  els.carbType?.querySelectorAll('[data-carb]').forEach((b) => {
+    const on = b.dataset.carb === (state.carbType || 'fast');
+    b.tabIndex = on ? 0 : -1;
+  });
+}
+
+/** Arrow keys move through a radio group (one tab stop, like native radios). */
+function enableRoving(container, selector) {
+  if (!container) return;
+  container.addEventListener('keydown', (event) => {
+    if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return;
+    const items = [...container.querySelectorAll(selector)];
+    const index = items.indexOf(document.activeElement);
+    if (index === -1) return;
+    event.preventDefault();
+    const step = event.key === 'ArrowLeft' || event.key === 'ArrowUp' ? -1 : 1;
+    const next = items[(index + step + items.length) % items.length];
+    next.focus();
+    next.click();
   });
 }
 
@@ -242,11 +284,26 @@ function render() {
   raf = document.hidden ? setTimeout(run, 0) : requestAnimationFrame(run);
 }
 
-function paint() {
+/**
+ * The engine speaks the display unit (it normalises mmol/L itself), while the
+ * app keeps every value in mg/dL. This is the single place that converts.
+ */
+function engineInput() {
   const raw = { ...state };
+  if (isMmol()) {
+    raw.glucose = toMmol(state.glucose);
+    raw.isf = toMmol(state.isf);
+    raw.targetGlucose = toMmol(state.targetGlucose);
+  }
   if (raw.iobEstimated) raw.iob = 1.5;
+  return raw;
+}
+
+function paint() {
+  const raw = engineInput();
   plan = buildPlan(raw);
   currentBand = buildBand(raw, plan);
+  currentAlternatives = suggestAlternatives(raw);
 
   const u = state.unit;
   const G = (v) => formatGlucose(v, u);
@@ -323,9 +380,13 @@ function paint() {
           Copy plan
         </button>
         <button type="button" class="btn btn--soft btn--sm" data-action="save">Save result</button>
+        <button type="button" class="btn btn--ghost btn--sm" data-action="link">Copy link</button>
         <button type="button" class="btn btn--ghost btn--sm" data-action="print">Print</button>
+        <button type="button" class="btn btn--ghost btn--sm" data-action="diagnostics">Copy diagnostics</button>
       </div>
     </section>
+
+    ${alternativesHtml()}
 
     <div class="metrics">
       <div class="metric metric--accent">
@@ -361,7 +422,8 @@ function paint() {
           No-plan scenario
         </label>
       </div>
-      <div class="chart-wrap"><canvas id="chart" role="img" aria-label="Glucose projection chart"></canvas></div>
+      <div class="chart-wrap"><canvas id="chart" role="img" aria-label="Glucose projection chart" aria-describedby="chartSummary"></canvas></div>
+      <p class="sr-only" id="chartSummary">${chartSummaryText()}</p>
       <div class="chart-foot">
         <div class="legend">
           <span><i></i>Plan</span>
@@ -408,7 +470,9 @@ function paint() {
               : 'No pump: carb strategy'
           }
         </p>
+        ${basalStepsHtml()}
         <p class="plan__note">${plan.basal.applicable ? plan.basal.note : plan.basal.mdiNote}</p>
+        ${plan.basal.applicable ? '<button type="button" class="link-btn" data-action="copy-program">Copy pump program</button>' : ''}
       </article>
 
       <article class="plan">
@@ -514,6 +578,387 @@ function drawChart() {
     showBaseline,
   });
   canvas.dataset.band = currentBand ? 'on' : 'off';
+}
+
+/* ------------------------------------------------------------------ */
+/* Nearby actions: alternatives, basal steps, sharing, backup          */
+/* ------------------------------------------------------------------ */
+
+function alternativesHtml() {
+  if (!currentAlternatives.length) return '';
+  return `
+    <div class="card card--alt">
+      <div class="card__head"><div><h3>What would change this?</h3><p>Same engine, one change at a time</p></div></div>
+      <ul class="alts">
+        ${currentAlternatives
+          .map(
+            (alt) => `<li>
+              <button type="button" class="alt" data-alt="${alt.id}">
+                <b>${alt.label}</b>
+                <span>${alt.detail} → ${alt.status.toLowerCase()} · nadir ${Math.round(alt.nadir)} mg/dL</span>
+              </button>
+            </li>`,
+          )
+          .join('')}
+      </ul>
+      <p class="alts__note">Tap one to apply it to the form.</p>
+    </div>`;
+}
+
+function applyAlternative(id) {
+  const alt = currentAlternatives.find((item) => item.id === id);
+  if (!alt) return;
+  const patch = { ...alt.patch };
+  if ('glucose' in patch) patch.glucose = isMmol() ? fromMmol(patch.glucose) : patch.glucose;
+  Object.assign(state, patch);
+  syncForm();
+  render();
+  toast(`Applied: ${alt.label.toLowerCase()}`);
+}
+
+function basalStepsHtml() {
+  const steps = plan?.basal?.steps || [];
+  if (!steps.length) return '';
+  return `
+    <div class="basal-steps" role="img" aria-label="${steps.map((step) => `${step.label} minus ${step.percent} percent`).join(', ')}">
+      ${steps
+        .map(
+          (step) => `<span class="basal-steps__step">
+            <i style="--h:${Math.max(10, step.percent)}%"></i>
+            <b>−${step.percent}%</b>
+            <em>${step.label}</em>
+          </span>`,
+        )
+        .join('')}
+    </div>`;
+}
+
+function chartSummaryText() {
+  if (!plan) return '';
+  const G = (value) => formatGlucose(value, state.unit);
+  const sim = plan.simulation;
+  return `Projection over ${sim.horizon} minutes. Exercise from minute ${sim.exStart} to ${sim.exEnd}. Nadir ${G(sim.nadir)} at minute ${sim.nadirAt}, peak ${G(sim.peak)}, finishes at ${G(sim.endGlucose)}.`;
+}
+
+/** URL-safe copy of the current scenario (health data: the user chooses to share it). */
+function shareUrl() {
+  const params = new URLSearchParams();
+  params.set('u', state.unit);
+  params.set('g', String(disp.glucose()));
+  params.set('tr', state.trend);
+  params.set('iob', String(state.iob));
+  params.set('s', state.sport);
+  params.set('d', String(state.durationMin));
+  params.set('i', String(state.intensity));
+  params.set('l', String(state.leadTimeMin));
+  params.set('k', state.ketones);
+  params.set('p', state.pump ? '1' : '0');
+  params.set('b', String(state.basalRate));
+  params.set('isf', String(disp.isf()));
+  params.set('dia', String(state.diaHours));
+  params.set('w', String(state.weightKg));
+  params.set('tg', String(disp.target()));
+  params.set('ct', state.carbType);
+  if (state.heat) params.set('ht', '1');
+  return `${location.origin}${location.pathname}#${params.toString()}`;
+}
+
+function applyHash() {
+  const raw = location.hash.replace(/^#/, '');
+  if (!raw) return false;
+  const params = new URLSearchParams(raw);
+  if (!params.has('g')) return false;
+
+  const unit = params.get('u') === 'mmol' ? 'mmol' : 'mgdl';
+  const conv = (value) => (unit === 'mmol' ? fromMmol(value) : value);
+  const num = (key, fallback) => {
+    const value = Number(params.get(key));
+    return Number.isFinite(value) ? value : fallback;
+  };
+
+  const next = { ...state, unit };
+  next.glucose = conv(num('g', state.glucose));
+  next.trend = TRENDS.some((t) => t.id === params.get('tr')) ? params.get('tr') : next.trend;
+  next.iob = num('iob', next.iob);
+  next.sport = SPORT_BY_ID[params.get('s')] ? params.get('s') : next.sport;
+  next.durationMin = num('d', next.durationMin);
+  next.intensity = num('i', next.intensity);
+  next.leadTimeMin = num('l', next.leadTimeMin);
+  next.ketones = params.get('k') || next.ketones;
+  next.pump = params.get('p') !== '0';
+  next.basalRate = num('b', next.basalRate);
+  next.isf = conv(num('isf', next.isf));
+  next.diaHours = num('dia', next.diaHours);
+  next.weightKg = num('w', next.weightKg);
+  next.targetGlucose = conv(num('tg', next.targetGlucose));
+  next.carbType = params.get('ct') === 'slow' ? 'slow' : 'fast';
+  next.heat = params.get('ht') === '1';
+
+  Object.assign(state, next);
+  return true;
+}
+
+function diagnosticsText() {
+  return JSON.stringify(
+    {
+      app: 'SokeriSport',
+      version: APP_VERSION,
+      generatedAt: new Date().toISOString(),
+      userAgent: navigator.userAgent,
+      unit: state.unit,
+      inputs: {
+        glucoseMgdl: Math.round(state.glucose),
+        trend: state.trend,
+        iob: state.iob,
+        sport: state.sport,
+        durationMin: state.durationMin,
+        intensity: state.intensity,
+        leadTimeMin: state.leadTimeMin,
+        ketones: state.ketones,
+        pump: state.pump,
+        basalRate: state.basalRate,
+        isf: state.isf,
+        diaHours: state.diaHours,
+        weightKg: state.weightKg,
+        targetGlucose: state.targetGlucose,
+        carbType: state.carbType,
+        heat: state.heat,
+      },
+      plan: plan
+        ? {
+            status: plan.status.title,
+            level: plan.status.level,
+            preCarbs: plan.preCarb.grams,
+            duringPerHour: plan.during.perHour,
+            basalPercent: plan.basal.reductionPercent,
+            nadir: Math.round(plan.simulation.nadir),
+            peak: Math.round(plan.simulation.peak),
+            rationale: plan.rationale.map((row) => `${row.label}: ${row.expression} = ${row.value}`),
+          }
+        : null,
+    },
+    null,
+    2,
+  );
+}
+
+async function copyText(text, message) {
+  try {
+    await navigator.clipboard.writeText(text);
+    toast(message);
+    return true;
+  } catch {
+    const area = document.createElement('textarea');
+    area.value = text;
+    area.style.position = 'fixed';
+    area.style.opacity = '0';
+    document.body.appendChild(area);
+    area.select();
+    let ok = false;
+    try {
+      ok = document.execCommand('copy');
+      toast(ok ? message : 'Copy failed — select the text manually');
+    } catch {
+      toast('Copy failed — select the text manually');
+    }
+    area.remove();
+    return ok;
+  }
+}
+
+async function copyProgram() {
+  if (!plan?.basal?.programText) return;
+  await copyText(plan.basal.programText, 'Pump program copied');
+}
+
+/* --- history: personal accuracy ---------------------------------- */
+
+function renderStats() {
+  if (!els.statsBox) return;
+  const history = loadHistory();
+  const stats = outcomeStats(history);
+  if (!history.length) {
+    els.statsBox.hidden = true;
+    return;
+  }
+  if (!stats.logged) {
+    els.statsBox.hidden = false;
+    els.statsBox.innerHTML = `
+      <h4>Plan vs reality</h4>
+      <p class="stats__note">Add the lowest reading after a session and this panel starts comparing the plan with what actually happened. Two minutes per session is enough.</p>`;
+    return;
+  }
+
+  const G = (value) => formatGlucose(value, state.unit);
+  const band = accuracyBand(stats.meanAbsDeviation);
+  const bandText = {
+    close: 'The plan and reality usually agree.',
+    fair: 'The plan is close, with some spread.',
+    wide: 'The plan and reality differ — worth reviewing with your team.',
+    unknown: 'Not enough logged outcomes yet.',
+  }[band];
+
+  els.statsBox.hidden = false;
+  els.statsBox.innerHTML = `
+    <h4>Plan vs reality</h4>
+    <div class="stats">
+      <div><b>${stats.logged}</b><span>logged sessions</span></div>
+      <div><b>${stats.meanAbsDeviation === null ? '—' : G(stats.meanAbsDeviation)}</b><span>mean difference at the nadir</span></div>
+      <div><b>${stats.hypos}</b><span>hypos reported</span></div>
+      <div><b>${stats.carbAdherence === null ? '—' : `${Math.round(stats.carbAdherence * 100)}%`}</b><span>carbohydrate vs plan</span></div>
+    </div>
+    <p class="stats__note">${bandText}</p>`;
+}
+
+/* --- history: compare two plans ---------------------------------- */
+
+function renderCompareOptions() {
+  if (!els.compareA || !els.compareB) return;
+  const entries = loadHistory();
+  const options = entries
+    .map(
+      (entry) =>
+        `<option value="${entry.ts}">${entry.sport} · ${formatGlucose(entry.glucose, state.unit)} · ${entry.durationMin ?? '?'} min</option>`,
+    )
+    .join('');
+
+  const keepA = els.compareA.value;
+  const keepB = els.compareB.value;
+  els.compareA.innerHTML = options;
+  els.compareB.innerHTML = options;
+  if (entries.length > 1) els.compareB.selectedIndex = 1;
+  if (keepA) els.compareA.value = keepA;
+  if (keepB) els.compareB.value = keepB;
+}
+
+function compareRow(label, a, b, suffix = '') {
+  const same = a === b;
+  const cell = (value) => `${value === '—' || value === null || value === undefined ? '—' : `${value}${suffix}`}`;
+  return `<tr><th scope="row">${label}</th><td>${cell(a)}</td><td>${cell(b)}</td><td class="${same ? 'is-same' : 'is-diff'}">${same ? 'same' : 'differs'}</td></tr>`;
+}
+
+function runCompare() {
+  if (!els.compareOut || !els.compareA) return;
+  const entries = loadHistory();
+  const a = entries.find((entry) => entry.ts === Number(els.compareA.value));
+  const b = entries.find((entry) => entry.ts === Number(els.compareB.value));
+  if (!a || !b) {
+    els.compareOut.innerHTML = '<p class="stats__note">Pick two saved simulations.</p>';
+    return;
+  }
+
+  const planned = (entry) => entry.plannedCarbs ?? entry.carbs;
+  // Glucose columns follow the unit toggle; the rest is unit-free.
+  const G = (value) => (value === null || value === undefined || value === '' ? '—' : glucoseNumber(value, state.unit));
+  const gSuffix = isMmol() ? ' mmol/L' : ' mg/dL';
+  els.compareOut.innerHTML = `
+    <table class="compare">
+      <thead><tr><th></th><th>${new Date(a.ts).toLocaleDateString('en-GB')}</th><th>${new Date(b.ts).toLocaleDateString('en-GB')}</th><th></th></tr></thead>
+      <tbody>
+        ${compareRow('Sport', a.sport, b.sport)}
+        ${compareRow('Duration', a.durationMin ?? '—', b.durationMin ?? '—', ' min')}
+        ${compareRow('Intensity', a.intensity ?? '—', b.intensity ?? '—')}
+        ${compareRow('Start glucose', G(a.glucose), G(b.glucose), gSuffix)}
+        ${compareRow('Planned carbohydrate', planned(a), planned(b), ' g')}
+        ${compareRow('Planned nadir', G(a.plannedNadir), G(b.plannedNadir), gSuffix)}
+        ${compareRow('Outcome nadir', G(a.outcome?.min), G(b.outcome?.min), gSuffix)}
+      </tbody>
+    </table>`;
+}
+
+/* --- backup / restore -------------------------------------------- */
+
+function exportBackup() {
+  const blob = new Blob([JSON.stringify(exportSnapshot(), null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `sokerisport-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+  toast('Backup exported');
+}
+
+async function importBackup(file) {
+  if (!file) return;
+  const text = await file.text();
+  const result = importSnapshot(text);
+  if (!result.ok) {
+    toast(
+      result.reason === 'newer-schema'
+        ? 'That backup comes from a newer version'
+        : 'That file is not a SokeriSport backup',
+    );
+    return;
+  }
+  renderHistory();
+  renderStats();
+  renderCompareOptions();
+  toast(`Backup restored — ${result.restored} simulations`);
+}
+
+/* --- onboarding -------------------------------------------------- */
+
+const PRESETS = [
+  {
+    id: 'morning-run',
+    title: 'Morning run with IOB on board',
+    note: '132 mg/dL, falling, 1.8 U IOB, 75 min',
+    patch: { glucose: 132, trend: 'slowDown', iob: 1.8, sport: 'kosu', durationMin: 75, intensity: 3, leadTimeMin: 20 },
+  },
+  {
+    id: 'basketball',
+    title: 'Evening basketball',
+    note: '168 mg/dL, steady, 90 min of intervals',
+    patch: { glucose: 168, trend: 'flat', iob: 0.4, sport: 'basketbol', durationMin: 90, intensity: 4, leadTimeMin: 30 },
+  },
+  {
+    id: 'low',
+    title: 'Starting low',
+    note: '72 mg/dL, falling — see the stop path',
+    patch: { glucose: 72, trend: 'down', iob: 0.2, sport: 'yuruyus', durationMin: 45, intensity: 2, leadTimeMin: 15 },
+  },
+];
+
+const ONBOARDING_KEY = 'sokerisport.onboarding.dismissed';
+
+function renderOnboarding() {
+  if (!els.onboarding) return;
+  let dismissed = false;
+  try {
+    dismissed = localStorage.getItem(ONBOARDING_KEY) === '1';
+  } catch {
+    dismissed = true;
+  }
+  if (dismissed || loadProfile()) {
+    els.onboarding.hidden = true;
+    return;
+  }
+
+  els.onboarding.hidden = false;
+  els.onboarding.innerHTML = `
+    <div class="onboarding__head">
+      <div><h3>First time here?</h3><p>Load an example, then change one value and watch the plan react.</p></div>
+      <button type="button" class="link-btn" data-onboarding-close>Dismiss</button>
+    </div>
+    <div class="onboarding__list">
+      ${PRESETS.map(
+        (preset) => `<button type="button" class="onboarding__item" data-preset="${preset.id}">
+          <b>${preset.title}</b><span>${preset.note}</span>
+        </button>`,
+      ).join('')}
+    </div>`;
+}
+
+function dismissOnboarding() {
+  try {
+    localStorage.setItem(ONBOARDING_KEY, '1');
+  } catch {
+    /* ignore */
+  }
+  if (els.onboarding) els.onboarding.hidden = true;
 }
 
 /**
@@ -712,6 +1157,14 @@ function bind() {
     if (btn.dataset.action === 'save') saveResult();
     if (btn.dataset.action === 'print') window.print();
     if (btn.dataset.action === 'save-outcome') saveOutcome();
+    if (btn.dataset.action === 'copy-program') await copyProgram();
+    if (btn.dataset.action === 'link') await copyText(shareUrl(), 'Link copied — it contains your glucose values');
+    if (btn.dataset.action === 'diagnostics') await copyText(diagnosticsText(), 'Diagnostics copied');
+  });
+
+  els.results.addEventListener('click', (e) => {
+    const alt = e.target.closest('[data-alt]');
+    if (alt) applyAlternative(alt.dataset.alt);
   });
 
   els.results.addEventListener('input', (e) => {
@@ -747,6 +1200,38 @@ function bind() {
   }
 
   if (els.historyExport) els.historyExport.addEventListener('click', exportCsv);
+  if (els.compareRun) els.compareRun.addEventListener('click', runCompare);
+  if (els.backupExport) els.backupExport.addEventListener('click', exportBackup);
+  if (els.backupImport) els.backupImport.addEventListener('click', () => els.backupFile?.click());
+  if (els.backupFile) {
+    els.backupFile.addEventListener('change', async (event) => {
+      await importBackup(event.target.files?.[0]);
+      event.target.value = '';
+    });
+  }
+
+  if (els.onboarding) {
+    els.onboarding.addEventListener('click', (event) => {
+      if (event.target.closest('[data-onboarding-close]')) {
+        dismissOnboarding();
+        return;
+      }
+      const preset = event.target.closest('[data-preset]');
+      if (!preset) return;
+      const found = PRESETS.find((item) => item.id === preset.dataset.preset);
+      if (!found) return;
+      Object.assign(state, found.patch);
+      syncForm();
+      render();
+      dismissOnboarding();
+      toast(`Example loaded: ${found.title}`);
+    });
+  }
+
+  enableRoving(els.trends, '[data-trend]');
+  enableRoving(els.sportPicker, '[data-sport]');
+  enableRoving(els.intensity, '[data-intensity]');
+  enableRoving(els.carbType, '[data-carb]');
 
   els.resetBtn.addEventListener('click', () => {
     Object.assign(state, DEFAULTS, { pump: DEFAULTS.pump });
@@ -993,6 +1478,9 @@ function renderHistory() {
       </li>`;
     })
     .join('');
+
+  renderStats();
+  renderCompareOptions();
 }
 
 /* ------------------------------------------------------------------ */
@@ -1022,14 +1510,25 @@ function init() {
     });
   }
 
+  const fromLink = applyHash();
+
   buildControls();
   bind();
   paintNetwork();
   window.addEventListener('online', paintNetwork);
   window.addEventListener('offline', paintNetwork);
 
+  if (els.storageNotice && !storageAvailable()) {
+    els.storageNotice.hidden = false;
+    els.storageNotice.textContent =
+      'This browser blocks local storage, so the profile, history and backup are unavailable. The simulator and the CSV export still work.';
+  }
+
   syncForm();
   render();
+  renderOnboarding();
+
+  if (fromLink) toast('Scenario loaded from the link');
 }
 
 init();

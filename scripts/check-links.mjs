@@ -8,7 +8,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const PAGES = ['index.html', 'app.html', 'science.html', '404.html'].filter((p) => fs.existsSync(path.join(ROOT, p)));
+const PAGES = ['index.html', 'app.html', 'science.html', 'guide.html', '404.html'].filter((p) => fs.existsSync(path.join(ROOT, p)));
 
 const EXTERNAL = /^(?:[a-z]+:|\/\/|#|data:)/i;
 

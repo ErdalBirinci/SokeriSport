@@ -1591,6 +1591,277 @@ output {
   }
 }
 
+/* --- storage notice / onboarding --------------------------------- */
+.notice {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #92400e;
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.28);
+  border-radius: 12px;
+}
+
+.onboarding {
+  margin-bottom: 14px;
+  padding: 14px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+}
+
+.onboarding__head {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.onboarding__head h3 {
+  margin: 0 0 2px;
+  font-size: 14px;
+}
+
+.onboarding__head p {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.onboarding__list {
+  display: grid;
+  gap: 8px;
+}
+
+.onboarding__item {
+  display: grid;
+  gap: 2px;
+  padding: 9px 11px;
+  text-align: left;
+  background: var(--surface-2);
+  border: 1px solid transparent;
+  border-radius: 11px;
+  transition: border-color 0.2s var(--ease);
+}
+
+.onboarding__item:hover {
+  border-color: var(--brand);
+}
+
+.onboarding__item b {
+  font-size: 12.5px;
+  color: var(--ink);
+}
+
+.onboarding__item span {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+/* --- what would change this? ------------------------------------- */
+.card--alt {
+  border-color: rgba(47, 107, 255, 0.25);
+  background: linear-gradient(180deg, rgba(47, 107, 255, 0.05), #fff 60%);
+}
+
+.alts {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.alt {
+  display: grid;
+  gap: 3px;
+  width: 100%;
+  padding: 10px 12px;
+  text-align: left;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  transition:
+    border-color 0.2s var(--ease),
+    transform 0.2s var(--ease-out);
+}
+
+.alt:hover {
+  border-color: var(--brand);
+  transform: translateY(-1px);
+}
+
+.alt b {
+  font-size: 12.8px;
+  color: var(--ink);
+}
+
+.alt span {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.alts__note {
+  margin: 10px 0 0;
+  font-size: 11px;
+  color: var(--muted-2);
+}
+
+/* --- basal steps -------------------------------------------------- */
+.basal-steps {
+  display: flex;
+  align-items: end;
+  gap: 6px;
+  height: 64px;
+  margin: 10px 0 4px;
+}
+
+.basal-steps__step {
+  display: grid;
+  justify-items: center;
+  align-content: end;
+  gap: 2px;
+  flex: 1;
+  height: 100%;
+}
+
+.basal-steps__step i {
+  width: 100%;
+  height: var(--h, 40%);
+  background: linear-gradient(180deg, rgba(47, 107, 255, 0.85), rgba(47, 107, 255, 0.35));
+  border-radius: 6px 6px 2px 2px;
+}
+
+.basal-steps__step b {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--brand-deep);
+}
+
+.basal-steps__step em {
+  font-size: 9.5px;
+  font-style: normal;
+  color: var(--muted-2);
+}
+
+/* --- stats, compare, backup -------------------------------------- */
+.stats-box h4,
+.compare h4,
+.backup h4 {
+  margin: 14px 0 6px;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  color: var(--ink-2);
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.stats div {
+  display: grid;
+  gap: 1px;
+  padding: 8px 10px;
+  background: var(--surface-2);
+  border-radius: 10px;
+}
+
+.stats b {
+  font-family: var(--mono);
+  font-size: 14px;
+  color: var(--brand-deep);
+}
+
+.stats span {
+  font-size: 10.5px;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
+.stats__note,
+.backup__note {
+  margin: 8px 0 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.compare,
+.compare__pick,
+.backup {
+  min-width: 0;
+}
+
+.compare__pick {
+  display: grid;
+  gap: 6px;
+}
+
+/* Native selects size to their longest option; keep them inside the panel on 320 px. */
+.compare__pick select {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  padding: 7px 9px;
+  font: inherit;
+  font-size: 12px;
+  color: var(--ink);
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+}
+
+.compare__out {
+  margin-top: 10px;
+  overflow-x: auto;
+  /* A wide comparison table scrolls inside its own box instead of stretching
+     the form grid (which would push the panel past a 320 px viewport). */
+  contain: inline-size;
+}
+
+.compare table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11.5px;
+}
+
+.compare th,
+.compare td {
+  padding: 5px 6px;
+  text-align: left;
+  border-bottom: 1px solid rgba(16, 24, 40, 0.06);
+  white-space: nowrap;
+}
+
+.compare thead th {
+  font-size: 10.5px;
+  color: var(--muted);
+}
+
+.compare th[scope='row'] {
+  font-weight: 600;
+  color: var(--ink-2);
+}
+
+.compare .is-diff {
+  color: #b45309;
+}
+
+.compare .is-same {
+  color: var(--muted-2);
+}
+
+.backup__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
 /* --- print: hand the plan to the care team ------------------------ */
 @media print {
   .topbar,

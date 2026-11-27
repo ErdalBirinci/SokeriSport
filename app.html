@@ -50,6 +50,9 @@
     <main class="layout">
       <!-- LEFT: form ----------------------------------------------- -->
       <form class="form" id="form" autocomplete="off" novalidate>
+        <p class="notice" id="storageNotice" hidden></p>
+
+        <section class="onboarding" id="onboarding" hidden aria-label="Example scenarios"></section>
         <section class="panel">
           <header class="panel__head">
             <span class="panel__n">01</span>
@@ -247,6 +250,28 @@
             </div>
           </header>
           <ul class="history__list" id="historyList"></ul>
+
+          <section class="stats-box" id="statsBox" hidden></section>
+
+          <div class="compare">
+            <h4>Compare two plans</h4>
+            <div class="compare__pick">
+              <select id="compareA" aria-label="First plan"></select>
+              <select id="compareB" aria-label="Second plan"></select>
+              <button type="button" class="btn btn--soft btn--sm" id="compareRun">Compare</button>
+            </div>
+            <div id="compareOut" class="compare__out"></div>
+          </div>
+
+          <div class="backup">
+            <h4>Backup</h4>
+            <p class="backup__note">Everything lives on this device. Export a JSON file to move it to another browser.</p>
+            <div class="backup__actions">
+              <button type="button" class="btn btn--soft btn--sm" id="backupExport">Export backup</button>
+              <button type="button" class="btn btn--ghost btn--sm" id="backupImport">Restore backup</button>
+              <input type="file" id="backupFile" accept="application/json,.json" hidden />
+            </div>
+          </div>
         </section>
       </form>
 
@@ -281,6 +306,7 @@
       <p>
         SokeriSport is an educational simulation; it is not medical advice, diagnosis or treatment.
         Make insulin and carbohydrate decisions together with your diabetes team.
+        <a href="guide.html">Field guide</a>
         <a href="science.html">Method and sources</a>
         <a href="https://github.com/ErdalBirinci/SokeriSport/issues/new?template=plan-report.yml" rel="noopener">Report a problem</a>
         <button type="button" class="link-btn" data-hypo>Feeling low right now?</button>

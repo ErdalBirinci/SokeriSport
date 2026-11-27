@@ -34,10 +34,40 @@ export function registerServiceWorker() {
   window.addEventListener('load', async () => {
     try {
       registration = await navigator.serviceWorker.register('sw.js', { scope: './' });
+      registration.addEventListener('updatefound', () => {
+        const installing = registration.installing;
+        if (!installing) return;
+        installing.addEventListener('statechange', () => {
+          // A worker already controlled the page → this is an update, not the first install.
+          if (installing.state === 'installed' && navigator.serviceWorker.controller) showUpdateBar(installing);
+        });
+      });
     } catch (err) {
       console.warn('Service worker registration failed:', err);
     }
   });
+}
+
+/** Cached assets are replaced only after a reload: say so instead of letting it happen silently. */
+function showUpdateBar(worker) {
+  if (document.querySelector('.update-bar')) return;
+  const bar = document.createElement('div');
+  bar.className = 'install-bar update-bar';
+  bar.setAttribute('role', 'status');
+  bar.innerHTML = `
+    <div class="install-bar__text">
+      <b>A new version is ready</b>
+      <span>Reload to get the latest engine and fixes.</span>
+    </div>
+    <button type="button" class="btn btn--primary btn--sm" data-reload>Reload</button>
+    <button type="button" class="link-btn" data-dismiss>Later</button>`;
+  document.body.appendChild(bar);
+
+  bar.querySelector('[data-reload]').addEventListener('click', () => {
+    worker.postMessage('SKIP_WAITING');
+    location.reload();
+  });
+  bar.querySelector('[data-dismiss]').addEventListener('click', () => bar.remove());
 }
 
 /** Small banner: install on Android/desktop, instructions on iOS Safari. */
