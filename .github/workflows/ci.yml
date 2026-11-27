@@ -14,9 +14,10 @@ jobs:
         with:
           fetch-depth: 0
 
+      # Node 21+ expands the glob in `node --test "tests/**/*.test.mjs"`.
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       - name: Engine and language tests
         run: npm test
