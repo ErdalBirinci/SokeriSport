@@ -9,6 +9,7 @@
     "start": "node server.mjs",
     "test": "node --test tests/*.test.mjs",
     "check": "node scripts/check-links.mjs && node scripts/check-sw-version.mjs",
+    "live": "node scripts/live-check.mjs",
     "build": "node scripts/build.mjs",
     "golden": "node scripts/update-golden.mjs",
     "icons": "node scripts/make-icons.mjs"

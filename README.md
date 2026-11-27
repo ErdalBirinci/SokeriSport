@@ -326,6 +326,7 @@ the English-only language guard.
 | Links | `npm run check` | Every internal link and anchor resolves |
 | Cache busting | `npm run check` | `sw.js` VERSION must change when shipped assets change |
 | Language | `npm test` | No Turkish UI strings or legacy unit shorthands leak in |
+| Live site | `npm run live` | The published bytes still match this checkout |
 
 The golden fixtures pin the engine output for a set of representative scenarios, so a threshold change
 shows up as a reviewable diff instead of a silent behaviour change. `REVIEW.md` records the clinical
@@ -334,6 +335,14 @@ review behind the thresholds and the policy for changing them.
 Accessibility is part of the interface, not a later pass: skip link, focus management after a plan is
 rendered, `aria-pressed` unit and option buttons, labelled controls, a live region that announces
 plan changes without flooding a screen reader, visible focus rings and reduced-motion support.
+
+`npm run live` compares the published site with this checkout: every file the service worker
+precaches, every manifest icon, every README screenshot and the branded 404 page must answer with the
+exact local bytes, and the served `version.js`/`sw.js` must carry the `package.json` version. The
+`Live site` workflow runs it every day at 05:23 UTC and on demand. A failed run opens a GitHub issue
+labelled `live-site`, assigned to the repository owner, so the break arrives as a notification; a
+repeat failure comments on that issue and the next green run closes it. To prove the alert on
+demand, dispatch the workflow with a broken `base_url`.
 
 ---
 

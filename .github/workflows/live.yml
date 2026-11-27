@@ -1,0 +1,61 @@
+name: Live site
+
+# The published app can break without a commit: a deploy that served the
+# previous document, a file truncated on the way out, an icon the manifest
+# names but GitHub Pages no longer serves. This runs the live check every day,
+# and turns a red run into a GitHub issue assigned to the owner, so a silent
+# break becomes a notification instead of a user telling us.
+
+on:
+  schedule:
+    - cron: "23 5 * * *"
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: "Origin to check (empty = the published site). Point it at a broken path to prove the alert."
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: live
+  cancel-in-progress: true
+
+jobs:
+  live:
+    name: Verify the published site
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Live checks against the published site
+        env:
+          BASE_URL: ${{ inputs.base_url != '' && inputs.base_url || 'https://erdalbirinci.github.io/SokeriSport' }}
+        run: npm run live
+      - name: Keep the recorded result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-result
+          path: dist/live.json
+          if-no-files-found: ignore
+      - name: Open or update the failure issue
+        if: failure()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: node scripts/report-live-failure.mjs open
+      - name: Close the issue once the site is green again
+        if: success()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: node scripts/report-live-failure.mjs close
