@@ -56,6 +56,7 @@ assets/css/app.css         Simulator interface
 assets/js/engine.js        ★ Deterministic rule engine + simulation (pure, side-effect free)
 assets/js/scenario.js      State sanitising + share-link encode/decode (pure)
 assets/js/csv.js           CSV export with formula-safe escaping (pure)
+assets/js/backup.js        Password-encrypted backup: PBKDF2 + AES-GCM (WebCrypto)
 assets/js/version.js       Version shown in diagnostics (guarded against package.json)
 assets/js/chart.js         Dependency-free canvas timeline
 assets/js/storage.js       localStorage profile + history
@@ -82,6 +83,7 @@ tests/fixtures/             Golden scenarios, snapshot shape and expected output
 tests/engine.test.mjs      Engine tests
 tests/scenario.test.mjs    State sanitising and share-link round-trips
 tests/csv.test.mjs         CSV columns and spreadsheet-formula escaping
+tests/backup.test.mjs      Encrypted backup round-trips and old plaintext imports
 tests/version.test.mjs     Version and offline-shell guards
 tests/language.test.mjs    Turkish-text and legacy-unit guard
 ```
@@ -167,13 +169,36 @@ counter-regulation is added; the result is clamped to 40–350 mg/dL.
   planned/actual nadir side by side.
 - **Plan vs reality** — logged outcomes are summarised locally: sessions logged, mean difference at
   the nadir, hypos reported and carbohydrate adherence.
-- **Backup** — JSON export/import of the profile and the history, with a schema version and
-  migration for entries written by older builds.
+- **Encrypted backup** — the profile and history export as a JSON envelope encrypted with
+  AES-GCM 256, keyed by PBKDF2-SHA256 (250,000 iterations). The password is never stored and
+  cannot be recovered; the form asks for it twice and refuses a mismatch before encrypting, so a
+  typo cannot lock the file. Plaintext backups from earlier builds still import, and entries are
+  migrated on read. Clearing the history or restoring a backup asks for confirmation.
 - **Diagnostics and share links** — one tap copies a support payload (version, inputs, plan) or a
   link that contains the current scenario. The link contains health values: sharing is a choice.
 - **Validated restore** — a profile, share link or imported backup is sanitised field by field:
   unknown sports, malformed units and out-of-range numbers fall back to safe values instead of
   breaking the form. Clearing the history or restoring a backup asks for confirmation first.
+
+### Backup format
+
+`Export encrypted backup` writes one JSON envelope:
+
+```json
+{
+  "format": "sokerisport-backup",
+  "formatVersion": 1,
+  "kdf": { "name": "PBKDF2", "hash": "SHA-256", "iterations": 250000, "salt": "…" },
+  "cipher": { "name": "AES-GCM", "iv": "…" },
+  "data": "…"
+}
+```
+
+The key is derived from the password in the browser with WebCrypto. The password is never written
+to the file, to `localStorage` or to a server, so a lost password means a lost backup. The
+plaintext payload is the same snapshot as before (`schemaVersion`, `profile`, `history`), which is
+why backups exported by earlier builds import unchanged. A wrong password and a modified file both
+fail the AES-GCM authentication check and restore nothing.
 
 ## Sport profiles
 
@@ -199,6 +224,8 @@ counter-regulation is added; the result is clamped to 40–350 mg/dL.
 - `sw.js`: app shell cache; network-first for navigations, cache-first for static assets with a
   silent background update.
 - Data lives only in `localStorage`: profile + the last 50 simulations. Nothing goes to a server.
+- The backup export is encrypted in the browser; the service worker and the app never see the
+  password.
 
 ---
 

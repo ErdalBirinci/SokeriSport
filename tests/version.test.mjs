@@ -24,7 +24,7 @@ test('the service worker cache version carries the same release', () => {
 
 test('the new modules are part of the offline shell', () => {
   const shell = read('sw.js');
-  for (const file of ['scenario.js', 'csv.js', 'version.js']) {
+  for (const file of ['scenario.js', 'csv.js', 'backup.js', 'version.js']) {
     assert.ok(shell.includes(`assets/js/${file}`), `sw.js SHELL is missing ${file}`);
   }
 });

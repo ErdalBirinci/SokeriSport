@@ -33,6 +33,13 @@ import {
 import { outcomeStats, accuracyBand } from './stats.js';
 import { sanitizeState, encodeScenario, decodeScenario } from './scenario.js';
 import { historyToCsv } from './csv.js';
+import {
+  encryptSnapshot,
+  decryptSnapshot,
+  parseBackupText,
+  validateBackupPassword,
+  MIN_PASSWORD_LENGTH,
+} from './backup.js';
 import { APP_VERSION } from './version.js';
 
 /* ------------------------------------------------------------------ */
@@ -93,6 +100,9 @@ const els = {
   backupExport: $('backupExport'),
   backupImport: $('backupImport'),
   backupFile: $('backupFile'),
+  backupPassword: $('backupPassword'),
+  backupPasswordConfirm: $('backupPasswordConfirm'),
+  backupConfirm: $('backupConfirm'),
   storageNotice: $('storageNotice'),
   onboarding: $('onboarding'),
   historyExport: $('historyExport'),
@@ -873,22 +883,66 @@ function runCompare() {
 
 /* --- backup / restore -------------------------------------------- */
 
-function exportBackup() {
-  const blob = new Blob([JSON.stringify(exportSnapshot(), null, 2)], { type: 'application/json' });
+/** Downloads a generated file without a server round trip. */
+function downloadFile(text, filename, type) {
+  const blob = new Blob([text], { type });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
-  link.download = `sokerisport-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  link.download = filename;
   document.body.appendChild(link);
   link.click();
   link.remove();
   URL.revokeObjectURL(url);
-  toast('Backup exported');
+}
+
+/** The confirmation field only appears once a password is being typed. */
+function syncBackupConfirm() {
+  if (!els.backupConfirm) return;
+  const typed = (els.backupPassword?.value || '').length > 0;
+  els.backupConfirm.hidden = !typed;
+  if (!typed && els.backupPasswordConfirm) els.backupPasswordConfirm.value = '';
+}
+
+function clearBackupPasswords() {
+  if (els.backupPassword) els.backupPassword.value = '';
+  if (els.backupPasswordConfirm) els.backupPasswordConfirm.value = '';
+  syncBackupConfirm();
+}
+
+async function exportBackup() {
+  const password = els.backupPassword?.value || '';
+  const confirmation = els.backupPasswordConfirm?.value || '';
+  const check = validateBackupPassword(password, confirmation);
+  if (!check.ok) {
+    if (check.reason === 'too-short') {
+      toast(`Set a backup password of at least ${MIN_PASSWORD_LENGTH} characters`);
+      els.backupPassword?.focus();
+    } else {
+      toast('The two passwords do not match');
+      els.backupPasswordConfirm?.focus();
+    }
+    return;
+  }
+
+  try {
+    const envelope = await encryptSnapshot(exportSnapshot(), password);
+    downloadFile(
+      JSON.stringify(envelope, null, 2),
+      `sokerisport-backup-${new Date().toISOString().slice(0, 10)}.json`,
+      'application/json',
+    );
+    // The password is never stored: clearing both fields also keeps it out of
+    // screenshots and shared screens after the export.
+    clearBackupPasswords();
+    toast('Encrypted backup exported — keep the password safe');
+  } catch {
+    toast('Backup could not be encrypted');
+  }
 }
 
 async function importBackup(file) {
   if (!file) return;
-  if (!window.confirm('Restoring replaces the profile and simulations stored on this device. Continue?')) return;
 
   let text;
   try {
@@ -897,7 +951,33 @@ async function importBackup(file) {
     toast('That file could not be read');
     return;
   }
-  const result = importSnapshot(text);
+
+  const parsed = parseBackupText(text);
+  if (parsed.kind === 'invalid') {
+    toast('That file is not a SokeriSport backup');
+    return;
+  }
+
+  let snapshot = parsed.snapshot;
+  if (parsed.kind === 'encrypted') {
+    const typed = els.backupPassword?.value || '';
+    const password = typed || window.prompt('Password for this backup') || '';
+    const decrypted = await decryptSnapshot(parsed.envelope, password);
+    if (!decrypted.ok) {
+      toast(
+        decrypted.reason === 'password-required'
+          ? 'This backup is encrypted — enter its password'
+          : 'Wrong password — the backup was not restored',
+      );
+      return;
+    }
+    snapshot = decrypted.snapshot;
+    clearBackupPasswords();
+  }
+
+  if (!window.confirm('Restoring replaces the profile and simulations stored on this device. Continue?')) return;
+
+  const result = importSnapshot(snapshot);
   if (!result.ok) {
     toast(
       result.reason === 'newer-schema'
@@ -1226,6 +1306,7 @@ function bind() {
 
   if (els.historyExport) els.historyExport.addEventListener('click', exportCsv);
   if (els.compareRun) els.compareRun.addEventListener('click', runCompare);
+  if (els.backupPassword) els.backupPassword.addEventListener('input', syncBackupConfirm);
   if (els.backupExport) els.backupExport.addEventListener('click', exportBackup);
   if (els.backupImport) els.backupImport.addEventListener('click', () => els.backupFile?.click());
   if (els.backupFile) {
@@ -1481,15 +1562,11 @@ function exportCsv() {
     return;
   }
 
-  const blob = new Blob([historyToCsv(rows)], { type: 'text/csv;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = `sokerisport-history-${new Date().toISOString().slice(0, 10)}.csv`;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
+  downloadFile(
+    historyToCsv(rows),
+    `sokerisport-history-${new Date().toISOString().slice(0, 10)}.csv`,
+    'text/csv;charset=utf-8',
+  );
   toast('History exported as CSV');
 }
 

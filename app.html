@@ -265,9 +265,22 @@
 
           <div class="backup">
             <h4>Backup</h4>
-            <p class="backup__note">Everything lives on this device. Export a JSON file to move it to another browser.</p>
+            <p class="backup__note">Everything lives on this device. Export an encrypted JSON file to move it to another browser.</p>
+            <label class="backup__password">
+              <span>Backup password</span>
+              <input id="backupPassword" type="password" autocomplete="new-password" minlength="8"
+                placeholder="At least 8 characters" aria-describedby="backupPasswordHelp" />
+            </label>
+            <label class="backup__password" id="backupConfirm" hidden>
+              <span>Repeat password</span>
+              <input id="backupPasswordConfirm" type="password" autocomplete="new-password" minlength="8"
+                placeholder="Type it again" aria-describedby="backupPasswordHelp" />
+            </label>
+            <p class="backup__note" id="backupPasswordHelp">
+              AES-GCM encryption; the password is never stored and cannot be recovered. It is asked for twice so a typo cannot lock the file. Plaintext backups from earlier versions still restore.
+            </p>
             <div class="backup__actions">
-              <button type="button" class="btn btn--soft btn--sm" id="backupExport">Export backup</button>
+              <button type="button" class="btn btn--soft btn--sm" id="backupExport">Export encrypted backup</button>
               <button type="button" class="btn btn--ghost btn--sm" id="backupImport">Restore backup</button>
               <input type="file" id="backupFile" accept="application/json,.json" hidden />
             </div>
